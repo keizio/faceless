@@ -23,7 +23,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export async function runContentPipeline(payload: GenerationJobPayload) {
-  const { jobId, userId, contentType, platform, prompt } = payload;
+  const { jobId, userId, contentType, platform, prompt, avatarId } = payload;
   const contentId = payload.contentId!;
 
   await db
@@ -33,6 +33,9 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
 
   try {
     let result: unknown;
+
+    const aspectRatio = payload.aspectRatio ?? "9:16";
+    const language = payload.language ?? "en";
 
     switch (contentType) {
       case "image": {
@@ -45,7 +48,9 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
               userId,
               prompt: prompt ?? "",
               platform: platform ?? "generic",
-              aspectRatio: "9:16",
+              aspectRatio,
+              language,
+              avatarId,
             },
           }),
           WORKFLOW_TIMEOUT,
@@ -63,8 +68,10 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
               userId,
               prompt: prompt ?? "",
               platform: platform ?? "generic",
-              aspectRatio: "9:16",
+              aspectRatio,
               sceneCount: 3,
+              language,
+              avatarId,
             },
           }),
           WORKFLOW_TIMEOUT,
@@ -89,6 +96,8 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
                 | "text",
               platform: platform ?? "generic",
               prompt: prompt ?? "",
+              language,
+              avatarId,
             },
           }),
           WORKFLOW_TIMEOUT,

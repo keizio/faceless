@@ -45,7 +45,12 @@ export class OpenRouterTextProvider implements TextProvider {
 }
 
 export class OpenRouterImageProvider implements ImageProvider {
-  async generate(prompt: string, _size?: string, model?: string): Promise<string> {
+  async generate(
+    prompt: string,
+    _size?: string,
+    model?: string,
+    _options?: { negativePrompt?: string; qualityTags?: string[] },
+  ): Promise<string> {
     const response = await fetch(`${OPENROUTER_BASE_URL}/images/generations`, {
       method: "POST",
       headers: {
@@ -83,7 +88,9 @@ export class OpenRouterVideoProvider implements VideoProvider {
   async generate(
     sceneImages: { url: string; description: string }[],
     storyboard: string,
+    avatarReferenceImage?: string,
     onProgress?: (completed: number, total: number) => void,
+    _options?: { avatarReferenceImage?: string; negativePrompt?: string },
   ): Promise<string[]> {
     const videoUrls: string[] = [];
 

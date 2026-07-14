@@ -201,7 +201,12 @@ export class DashScopeTextProvider implements TextProvider {
 }
 
 export class DashScopeImageProvider implements ImageProvider {
-  async generate(prompt: string, size?: string): Promise<string> {
+  async generate(
+    prompt: string,
+    size?: string,
+    _model?: string,
+    _options?: { negativePrompt?: string; qualityTags?: string[] },
+  ): Promise<string> {
     const body = {
       model: IMAGE_MODEL,
       input: {
@@ -254,7 +259,9 @@ export class DashScopeVideoProvider implements VideoProvider {
   async generate(
     sceneImages: { url: string; description: string }[],
     storyboard: string,
+    avatarReferenceImage?: string,
     onProgress?: (completed: number, total: number) => void,
+    _options?: { avatarReferenceImage?: string; negativePrompt?: string },
   ): Promise<string[]> {
     const videoUrls: string[] = [];
 
@@ -262,11 +269,17 @@ export class DashScopeVideoProvider implements VideoProvider {
       const scene = sceneImages[i];
       const videoPrompt = `${storyboard}\n\nScene ${i + 1}: ${scene.description}`;
 
+      const media: { type: string; url: string }[] = [];
+      if (avatarReferenceImage && i === 0) {
+        media.push({ type: "first_frame", url: avatarReferenceImage });
+      }
+      media.push({ type: "first_frame", url: scene.url });
+
       const body = {
         model: VIDEO_MODEL,
         input: {
           prompt: videoPrompt,
-          media: [{ type: "first_frame", url: scene.url }],
+          media,
         },
         parameters: {
           resolution: "720P",

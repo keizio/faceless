@@ -5,6 +5,7 @@ import {
   mediaSelectorAgent,
   captionGeneratorAgent,
   qualityReviewerAgent,
+  promptEnhancerAgent,
 } from "../agents/index.js";
 
 import { generateImageWorkflow } from "./workflows/generate-image-workflow.js";
@@ -17,6 +18,7 @@ export const mastra: Mastra = new Mastra({
     mediaSelector: mediaSelectorAgent,
     captionGenerator: captionGeneratorAgent,
     qualityReviewer: qualityReviewerAgent,
+    promptEnhancer: promptEnhancerAgent,
   },
   workflows: {
     generateImageWorkflow,
