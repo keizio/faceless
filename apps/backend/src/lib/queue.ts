@@ -30,7 +30,10 @@ export interface GenerationJobPayload {
   projectId?: string;
   contentType?: string;
   platform?: string;
+  aspectRatio?: string;
+  language?: string;
   prompt?: string;
+  avatarId?: string;
   sceneIds?: string[];
   imageSize?: string;
 }

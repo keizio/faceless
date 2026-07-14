@@ -1,9 +1,6 @@
 import admin from "firebase-admin";
-import { config } from "dotenv";
 import type { Auth } from "firebase-admin/auth";
 import type { Firestore } from "firebase-admin/firestore";
-
-config({ path: "../../.env" });
 
 let app: admin.app.App;
 

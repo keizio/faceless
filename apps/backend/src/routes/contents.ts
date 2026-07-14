@@ -1,23 +1,11 @@
 import { Hono } from "hono";
 import { verifyFirebaseToken } from "../middleware/auth";
-import { validate } from "../middleware/validate";
 import { ContentService } from "../services/content";
-import { createContentSchema } from "@faceless/shared";
-import type { CreateContentInput } from "@faceless/shared";
 import type { AppEnv } from "../app";
 
 export const contentRoutes = new Hono<AppEnv>();
 
 contentRoutes.use("*", verifyFirebaseToken);
-
-contentRoutes.post("/:projectId/contents", validate(createContentSchema), async (c) => {
-  const userId = c.get("userId");
-  const projectId = c.req.param("projectId")!;
-  const data = c.get("validated") as CreateContentInput;
-  const service = new ContentService();
-  const result = await service.createContent(userId, projectId, data);
-  return c.json(result, 201);
-});
 
 contentRoutes.get("/:id", async (c) => {
   const userId = c.get("userId");
@@ -41,4 +29,16 @@ contentRoutes.post("/:id/regenerate", async (c) => {
   const service = new ContentService();
   const result = await service.regenerateContent(userId, id);
   return c.json(result);
+});
+
+contentRoutes.post("/:id/duplicate", async (c) => {
+  const userId = c.get("userId");
+  const id = c.req.param("id")!;
+  const { language } = await c.req.json();
+  if (!language || typeof language !== "string") {
+    return c.json({ error: "language is required" }, 400);
+  }
+  const service = new ContentService();
+  const result = await service.duplicateContent(userId, id, language);
+  return c.json(result, 201);
 });

@@ -41,6 +41,17 @@ export const PLATFORM_SPECS = {
   },
 } as const;
 
+export const SPEECH_STYLE_LABELS = {
+  formal: "Formal",
+  casual: "Casual",
+  humorous: "Humorous",
+  professional: "Professional",
+  friendly: "Friendly",
+  persuasive: "Persuasive",
+  inspirational: "Inspirational",
+  educational: "Educational",
+} as const;
+
 export const CONTENT_LIMITS = {
   maxProjectsPerUser: 50,
   maxContentsPerProject: 200,
@@ -49,6 +60,61 @@ export const CONTENT_LIMITS = {
   freePlanGenerationsPerDay: 5,
   proPlanGenerationsPerDay: 100,
 } as const;
+
+export const LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "id", label: "Indonesian / Bahasa Indonesia" },
+  { code: "ja", label: "Japanese / 日本語" },
+  { code: "ko", label: "Korean / 한국어" },
+  { code: "zh-CN", label: "Chinese Simplified / 简体中文" },
+  { code: "zh-TW", label: "Chinese Traditional / 繁體中文" },
+  { code: "es", label: "Spanish / Español" },
+  { code: "fr", label: "French / Français" },
+  { code: "de", label: "German / Deutsch" },
+  { code: "pt", label: "Portuguese / Português" },
+  { code: "ar", label: "Arabic / العربية" },
+  { code: "hi", label: "Hindi / हिन्दी" },
+  { code: "th", label: "Thai / ไทย" },
+  { code: "vi", label: "Vietnamese / Tiếng Việt" },
+  { code: "ru", label: "Russian / Русский" },
+  { code: "it", label: "Italian / Italiano" },
+  { code: "nl", label: "Dutch / Nederlands" },
+  { code: "tr", label: "Turkish / Türkçe" },
+  { code: "pl", label: "Polish / Polski" },
+  { code: "ms", label: "Malay / Bahasa Melayu" },
+] as const;
+
+export const GENDER_OPTIONS = ["Male", "Female", "Non-binary", "Prefer not to say"] as const;
+
+export const AGE_RANGES = [
+  { label: "Under 18", value: 16 },
+  { label: "18-24", value: 21 },
+  { label: "25-34", value: 30 },
+  { label: "35-44", value: 40 },
+  { label: "45-54", value: 50 },
+  { label: "55-64", value: 60 },
+  { label: "65+", value: 70 },
+] as const;
+
+export function getAgeRangeLabel(age: number | null): string {
+  if (!age) return "";
+  const range = AGE_RANGES.find((r) => r.value === age);
+  if (range) return range.label;
+  const closest = AGE_RANGES.reduce((prev, curr) =>
+    Math.abs(curr.value - age) < Math.abs(prev.value - age) ? curr : prev,
+  );
+  return closest.label;
+}
+
+export function getAgeRangeValue(age: number | null): string {
+  if (!age) return "";
+  const range = AGE_RANGES.find((r) => r.value === age);
+  if (range) return range.value.toString();
+  const closest = AGE_RANGES.reduce((prev, curr) =>
+    Math.abs(curr.value - age) < Math.abs(prev.value - age) ? curr : prev,
+  );
+  return closest.value.toString();
+}
 
 export const SUPPORTED_FORMATS = {
   image: ["png", "jpg", "webp"],

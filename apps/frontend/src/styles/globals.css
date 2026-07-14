@@ -1,28 +1,81 @@
+@import "tw-animate-css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --bg-primary: #0a0a0f;
-    --bg-surface: #111118;
-    --bg-surface-hover: #1a1a24;
-    --bg-elevated: #1e1e2a;
-    --border-color: #2a2a3a;
-    --text-primary: #f1f3f8;
-    --text-secondary: #9ea9c8;
-    --text-muted: #636f94;
-    --accent: #6366f1;
-    --accent-hover: #4f46e5;
-    --accent-secondary: #06b6d4;
-    --success: #22c55e;
-    --warning: #eab308;
-    --error: #ef4444;
+    --background: 240 20% 5%;
+    --foreground: 231 33% 96%;
+    --card: 240 12% 8%;
+    --card-foreground: 231 33% 96%;
+    --popover: 240 12% 8%;
+    --popover-foreground: 231 33% 96%;
+    --primary: 239 84% 66%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 17% 14%;
+    --secondary-foreground: 231 33% 96%;
+    --muted: 240 17% 14%;
+    --muted-foreground: 227 17% 48%;
+    --accent: 239 84% 66%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 16% 20%;
+    --input: 240 16% 20%;
+    --ring: 239 84% 66%;
+    --radius: 0.75rem;
+    --sidebar: 240 12% 8%;
+    --sidebar-foreground: 231 33% 96%;
+    --sidebar-primary: 239 84% 66%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 17% 14%;
+    --sidebar-accent-foreground: 231 33% 96%;
+    --sidebar-border: 240 16% 20%;
+    --sidebar-ring: 239 84% 66%;
+    --accent-secondary: 187 95% 43%;
+    --success: 142 71% 45%;
+    --warning: 45 93% 47%;
+  }
+
+  .dark {
+    --background: 240 20% 5%;
+    --foreground: 231 33% 96%;
+    --card: 240 12% 8%;
+    --card-foreground: 231 33% 96%;
+    --popover: 240 12% 8%;
+    --popover-foreground: 231 33% 96%;
+    --primary: 239 84% 66%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 17% 14%;
+    --secondary-foreground: 231 33% 96%;
+    --muted: 240 17% 14%;
+    --muted-foreground: 227 17% 48%;
+    --accent: 239 84% 66%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 16% 20%;
+    --input: 240 16% 20%;
+    --ring: 239 84% 66%;
+    --radius: 0.75rem;
+    --sidebar: 240 12% 8%;
+    --sidebar-foreground: 231 33% 96%;
+    --sidebar-primary: 239 84% 66%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 17% 14%;
+    --sidebar-accent-foreground: 231 33% 96%;
+    --sidebar-border: 240 16% 20%;
+    --sidebar-ring: 239 84% 66%;
+    --accent-secondary: 187 95% 43%;
+    --success: 142 71% 45%;
+    --warning: 45 93% 47%;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: #2a2a3a transparent;
+    scrollbar-color: hsl(var(--border)) transparent;
+    @apply border-border outline-ring/50;
   }
 
   *::-webkit-scrollbar {
@@ -35,99 +88,94 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: #2a2a3a;
+    background-color: hsl(var(--border));
     border-radius: 3px;
   }
 
   body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
+    @apply bg-background text-foreground;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  html {
+    @apply font-sans;
+    overflow-x: hidden;
   }
 }
 
 @layer components {
-  .card {
-    @apply rounded-xl border bg-[var(--bg-surface)] p-5;
-    border-color: var(--border-color);
+  /* Isometric grid */
+  .isometric-grid {
+    perspective: 1200px;
+    perspective-origin: 50% 0%;
+    transform-style: preserve-3d;
   }
 
-  .card-hover {
-    @apply card transition-all duration-200;
+  .isometric-card {
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-style: preserve-3d;
+    transform: rotateX(4deg) rotateY(-2deg);
   }
 
-  .card-hover:hover {
-    background-color: var(--bg-surface-hover);
-    box-shadow: 0 0 20px rgba(99, 102, 241, 0.1);
+  .isometric-card:hover {
+    transform: rotateX(0deg) rotateY(0deg) translateZ(30px);
   }
 
-  .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white transition-all duration-200;
-    background-color: var(--accent);
+  /* Glassmorphism */
+  .glass {
+    background: rgba(17, 17, 24, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(42, 42, 58, 0.5);
   }
 
-  .btn-primary:hover {
-    background-color: var(--accent-hover);
-    box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+  /* 3D floating animation */
+  @keyframes float-3d {
+    0%, 100% { transform: translateY(0px) rotateX(0deg); }
+    50% { transform: translateY(-8px) rotateX(2deg); }
   }
 
-  .btn-primary:disabled {
-    @apply opacity-50 cursor-not-allowed;
-    box-shadow: none;
+  .float-3d {
+    animation: float-3d 6s ease-in-out infinite;
+    transform-style: preserve-3d;
   }
 
-  .btn-ghost {
-    @apply inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200;
-    color: var(--text-secondary);
+  /* Depth shadow layers */
+  .depth-1 { box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px rgba(99,102,241,0.1); }
+  .depth-2 { box-shadow: 0 4px 6px rgba(0,0,0,0.3), 0 2px 12px rgba(99,102,241,0.08); }
+  .depth-3 { box-shadow: 0 10px 15px rgba(0,0,0,0.3), 0 4px 20px rgba(99,102,241,0.12); }
+
+  /* Text truncation */
+  .text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .btn-ghost:hover {
-    background-color: var(--bg-surface-hover);
-    color: var(--text-primary);
+  /* Touch-friendly targets */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
   }
 
-  .input {
-    @apply w-full rounded-lg border px-3 py-2 text-sm outline-none transition-all duration-200;
-    background-color: var(--bg-surface);
-    border-color: var(--border-color);
-    color: var(--text-primary);
-  }
-
-  .input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-  }
-
-  .input::placeholder {
-    color: var(--text-muted);
-  }
-
-  .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
-  }
-
-  .badge-ready {
-    background-color: rgba(34, 197, 94, 0.15);
-    color: var(--success);
-  }
-
-  .badge-failed {
-    background-color: rgba(239, 68, 68, 0.15);
-    color: var(--error);
-  }
-
-  .badge-generating {
-    background-color: rgba(234, 179, 8, 0.15);
-    color: var(--warning);
-  }
-
-  .badge-draft {
-    background-color: rgba(99, 102, 241, 0.15);
-    color: var(--accent);
-  }
-
-  .skeleton {
-    @apply animate-pulse rounded;
-    background-color: var(--bg-surface-hover);
+  /* Disable 3D transforms on mobile */
+  @media (max-width: 767px) {
+    .isometric-card {
+      transform: none !important;
+    }
+    .isometric-grid {
+      perspective: none !important;
+    }
+    .float-3d {
+      animation: none !important;
+    }
+    .desktop-only {
+      display: none !important;
+    }
+    .overflow-safe-mobile {
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
   }
 }

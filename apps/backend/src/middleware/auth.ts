@@ -1,5 +1,8 @@
 import { Context, Next } from "hono";
 import { getAuth } from "../lib/firebase";
+import { db } from "../db";
+import { users } from "../db/schema";
+import { eq } from "drizzle-orm";
 
 export async function verifyFirebaseToken(c: Context, next: Next) {
   const authHeader = c.req.header("Authorization");
@@ -13,8 +16,22 @@ export async function verifyFirebaseToken(c: Context, next: Next) {
   try {
     const auth = getAuth();
     const decoded = await auth.verifyIdToken(token);
-    c.set("userId", decoded.uid);
-    c.set("email", decoded.email || "");
+    const userId = decoded.uid;
+    const email = decoded.email || "";
+
+    c.set("userId", userId);
+    c.set("email", email);
+
+    const [existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!existing) {
+      await db.insert(users).values({ id: userId, email });
+    }
+
     await next();
   } catch {
     return c.json({ error: "Invalid or expired token" }, 401);

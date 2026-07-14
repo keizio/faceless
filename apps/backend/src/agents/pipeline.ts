@@ -2,6 +2,7 @@ import { mastra } from "../mastra/index.js";
 import { db } from "../db/index.js";
 import { contents, generationJobs } from "../db/schema.js";
 import { eq } from "drizzle-orm";
+import { NotificationService } from "../services/notification.js";
 import type { GenerationJobPayload } from "../lib/queue.js";
 
 const WORKFLOW_TIMEOUT = 600_000;
@@ -111,6 +112,15 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
       .set({ status: "ready" })
       .where(eq(contents.id, contentId));
 
+    const notificationService = new NotificationService();
+    await notificationService.create(
+      userId,
+      "content_generated",
+      "Content Generated",
+      `Your ${contentType} content has been generated successfully.`,
+      `/contents/${contentId}`,
+    );
+
     return result;
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "Unknown error";
@@ -124,6 +134,15 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
       .update(contents)
       .set({ status: "failed" })
       .where(eq(contents.id, contentId));
+
+    const notificationService = new NotificationService();
+    await notificationService.create(
+      userId,
+      "content_failed",
+      "Generation Failed",
+      `Your ${contentType} content generation failed: ${errMsg}`,
+      `/contents/${contentId}`,
+    );
 
     throw error;
   }

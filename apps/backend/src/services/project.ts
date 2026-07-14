@@ -1,14 +1,25 @@
 import { db } from "../db";
 import { projects, contents } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 export class ProjectService {
   async listProjects(userId: string) {
-    return db
-      .select()
+    const result = await db
+      .select({
+        id: projects.id,
+        userId: projects.userId,
+        name: projects.name,
+        description: projects.description,
+        createdAt: projects.createdAt,
+        updatedAt: projects.updatedAt,
+        contentsCount: sql<number>`count(${contents.id})`.mapWith(Number),
+      })
       .from(projects)
+      .leftJoin(contents, eq(contents.projectId, projects.id))
       .where(eq(projects.userId, userId))
+      .groupBy(projects.id)
       .orderBy(projects.updatedAt);
+    return result;
   }
 
   async createProject(

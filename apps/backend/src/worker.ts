@@ -1,8 +1,8 @@
 import { config } from "dotenv";
-config({ path: "../../.env" });
+config();
 
-import { createGenerationWorker, redisConnection } from "./lib/queue.js";
-import { jobHandler } from "./worker/handlers.js";
+const { createGenerationWorker, redisConnection } = await import("./lib/queue.js");
+const { jobHandler } = await import("./worker/handlers.js");
 
 const worker = createGenerationWorker(jobHandler);
 console.log("[worker] Generation worker started, waiting for jobs...");

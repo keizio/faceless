@@ -10,8 +10,11 @@ export class ContentService {
     data: {
       type: "image" | "slide" | "video" | "text";
       platform: string;
+      aspectRatio: string;
+      language: string;
       prompt: string;
       title?: string;
+      avatarId?: string;
     },
   ) {
     const [content] = await db
@@ -19,8 +22,11 @@ export class ContentService {
       .values({
         projectId,
         userId,
+        avatarId: data.avatarId ?? null,
         type: data.type,
         platform: data.platform as any,
+        aspectRatio: data.aspectRatio,
+        language: data.language,
         prompt: data.prompt,
         title: data.title,
         status: "queued",
@@ -43,7 +49,10 @@ export class ContentService {
       userId,
       contentType: data.type,
       platform: data.platform,
+      aspectRatio: data.aspectRatio,
+      language: data.language,
       prompt: data.prompt,
+      avatarId: data.avatarId,
     });
 
     return { content, job };
@@ -64,7 +73,14 @@ export class ContentService {
       .where(eq(contentVersions.contentId, id))
       .orderBy(desc(contentVersions.versionNumber));
 
-    return { ...content, versions };
+    const [latestJob] = await db
+      .select({ id: generationJobs.id })
+      .from(generationJobs)
+      .where(eq(generationJobs.contentId, id))
+      .orderBy(desc(generationJobs.createdAt))
+      .limit(1);
+
+    return { ...content, versions, latestJobId: latestJob?.id ?? null };
   }
 
   async listVersions(userId: string, contentId: string) {
@@ -106,9 +122,36 @@ export class ContentService {
       userId,
       contentType: content.type,
       platform: content.platform,
+      aspectRatio: content.aspectRatio ?? undefined,
+      language: content.language,
       prompt: content.prompt,
+      avatarId: content.avatarId ?? undefined,
     });
 
     return { job };
+  }
+
+  async duplicateContent(
+    userId: string,
+    contentId: string,
+    newLanguage: string,
+  ) {
+    const [content] = await db
+      .select()
+      .from(contents)
+      .where(and(eq(contents.id, contentId), eq(contents.userId, userId)))
+      .limit(1);
+
+    if (!content) throw new Error("Content not found");
+
+    return this.createContent(userId, content.projectId, {
+      type: content.type,
+      platform: content.platform,
+      aspectRatio: content.aspectRatio ?? "16:9",
+      language: newLanguage,
+      prompt: content.prompt,
+      title: content.title ? `${content.title} (${newLanguage})` : undefined,
+      avatarId: content.avatarId ?? undefined,
+    });
   }
 }

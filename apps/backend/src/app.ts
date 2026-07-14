@@ -4,7 +4,9 @@ import { logger } from "hono/logger";
 import { authRoutes } from "./routes/auth";
 import { projectRoutes } from "./routes/projects";
 import { contentRoutes } from "./routes/contents";
+import { avatarRoutes } from "./routes/avatars";
 import { jobRoutes } from "./routes/jobs";
+import { notificationRoutes } from "./routes/notifications";
 import { errorHandler } from "./middleware/error-handler";
 
 type Bindings = {};
@@ -23,8 +25,10 @@ app.use("*", cors());
 
 app.route("/api/auth", authRoutes);
 app.route("/api/projects", projectRoutes);
-app.route("/api/projects", contentRoutes);
+app.route("/api/contents", contentRoutes);
+app.route("/api/avatars", avatarRoutes);
 app.route("/api/jobs", jobRoutes);
+app.route("/api/notifications", notificationRoutes);
 
 app.onError(errorHandler);
 

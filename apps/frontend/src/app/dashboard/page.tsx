@@ -3,12 +3,21 @@
 import { AuthGuard } from "@/components/AuthGuard";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { StatsCard } from "@/components/StatsCard";
-import { StatusBadge } from "@/components/StatusBadge";
 import { CardSkeleton } from "@/components/Skeleton";
 import { useCreateProject, useProjects } from "@/hooks/useProjects";
-import { useContent } from "@/hooks/useContents";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useState } from "react";
+import {
+  Folder,
+  FileText,
+  Zap,
+  CheckCircle,
+  Plus,
+  ChevronRight,
+} from "lucide-react";
 
 export default function DashboardPage() {
   const { data: projects, isLoading } = useProjects();
@@ -25,55 +34,51 @@ export default function DashboardPage() {
   };
 
   const totalContents = projects?.reduce(
-    (sum: number, p: { projects?: { contents?: unknown[] } }) => sum + (p as any).contents?.length || 0,
+    (sum: number, p: { contentsCount?: number }) => sum + (p.contentsCount ?? 0),
     0,
   ) ?? 0;
 
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in space-y-8">
+        <div className="animate-fade-in space-y-8 overflow-safe-mobile">
           {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-[var(--text-primary)]">Dashboard</h1>
-              <p className="mt-1 text-sm text-[var(--text-muted)]">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Welcome back to your content studio
               </p>
             </div>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="btn-primary"
-            >
-              <svg className="mr-2 h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M8 3v10M3 8h10" />
-              </svg>
-              New Project
-            </button>
+            <Button onClick={() => setShowForm(!showForm)} className="shrink-0">
+              <Plus className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">New Project</span>
+              <span className="sm:hidden">New</span>
+            </Button>
           </div>
 
           {/* Stats cards */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
             <StatsCard
-              icon="📁"
+              icon={<Folder className="h-5 w-5 text-primary" />}
               label="Total Projects"
               value={projects?.length || 0}
               loading={isLoading}
             />
             <StatsCard
-              icon="📝"
+              icon={<FileText className="h-5 w-5 text-primary" />}
               label="Total Content"
               value={totalContents}
               loading={isLoading}
             />
             <StatsCard
-              icon="⚡"
+              icon={<Zap className="h-5 w-5 text-primary" />}
               label="Generated Today"
               value="--"
               loading={isLoading}
             />
             <StatsCard
-              icon="✅"
+              icon={<CheckCircle className="h-5 w-5 text-primary" />}
               label="Success Rate"
               value="--"
               loading={isLoading}
@@ -82,47 +87,50 @@ export default function DashboardPage() {
 
           {/* New project form */}
           {showForm && (
-            <div className="card animate-slide-in">
-              <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">
-                Create New Project
-              </h3>
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter project name..."
-                  className="input flex-1"
-                  autoFocus
-                  onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                />
-                <button
-                  onClick={handleCreate}
-                  disabled={createProject.isPending || !name.trim()}
-                  className="btn-primary"
-                >
-                  {createProject.isPending ? "Creating..." : "Create"}
-                </button>
-                <button
-                  onClick={() => setShowForm(false)}
-                  className="btn-ghost"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+            <Card className="animate-slide-in border-border/50">
+              <CardContent className="p-4">
+                <h3 className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wider">
+                  New Project
+                </h3>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Project name..."
+                    autoFocus
+                    onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                    className="flex-1 h-8 text-sm"
+                  />
+                  <Button
+                    onClick={handleCreate}
+                    disabled={createProject.isPending || !name.trim()}
+                    size="sm"
+                  >
+                    {createProject.isPending ? "Creating..." : "Create"}
+                  </Button>
+                  <Button
+                    onClick={() => setShowForm(false)}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Projects */}
           <section>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+              <h2 className="text-lg font-semibold text-foreground">
                 Recent Projects
               </h2>
               {projects?.length > 0 && (
                 <Link
                   href="/projects"
-                  className="text-sm text-[var(--accent)] hover:underline"
+                  className="text-sm text-primary hover:underline"
                 >
                   View all
                 </Link>
@@ -136,52 +144,56 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : projects?.length === 0 ? (
-              <div className="card flex flex-col items-center justify-center py-12 text-center">
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--accent)]/10 text-2xl">
-                  📁
-                </div>
-                <h3 className="mb-1 text-lg font-semibold text-[var(--text-primary)]">
-                  No projects yet
-                </h3>
-                <p className="mb-6 text-sm text-[var(--text-muted)]">
-                  Create your first project to start generating content
-                </p>
-                <button onClick={() => setShowForm(true)} className="btn-primary">
-                  Create Your First Project
-                </button>
-              </div>
+              <Card className="flex flex-col items-center justify-center py-12 text-center border-border/50">
+                <CardContent>
+                  <div className="mb-4 flex h-16 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-primary/10 mx-auto">
+                    <Folder className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="mb-1 text-lg font-semibold text-foreground">
+                    No projects yet
+                  </h3>
+                  <p className="mb-6 text-sm text-muted-foreground">
+                    Create your first project to start generating content
+                  </p>
+                  <Button onClick={() => setShowForm(true)}>
+                    Create Your First Project
+                  </Button>
+                </CardContent>
+              </Card>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="isometric-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {projects?.map(
                   (project: { id: string; name: string; description: string | null; createdAt: string }) => (
                     <Link
                       key={project.id}
                       href={`/projects/${project.id}`}
-                      className="card-hover group"
+                      className="isometric-card"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent)]/10 text-lg">
-                          📄
-                        </div>
-                        <span className="text-xs text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity">
-                          View →
-                        </span>
-                      </div>
-                      <h3 className="mt-3 font-semibold text-[var(--text-primary)]">
-                        {project.name}
-                      </h3>
-                      {project.description && (
-                        <p className="mt-1 text-sm text-[var(--text-muted)] line-clamp-2">
-                          {project.description}
-                        </p>
-                      )}
-                      <p className="mt-3 text-xs text-[var(--text-muted)]">
-                        {new Date(project.createdAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
+                      <Card className="h-full border-border/50 depth-2 group cursor-pointer transition-all duration-200 hover:bg-muted/50">
+                        <CardContent className="p-5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                              <FileText className="h-5 w-5 text-primary" />
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                          </div>
+                          <h3 className="mt-3 font-semibold text-foreground">
+                            {project.name}
+                          </h3>
+                          {project.description && (
+                            <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                              {project.description}
+                            </p>
+                          )}
+                          <p className="mt-3 text-xs text-muted-foreground/70">
+                            {new Date(project.createdAt).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </p>
+                        </CardContent>
+                      </Card>
                     </Link>
                   ),
                 )}

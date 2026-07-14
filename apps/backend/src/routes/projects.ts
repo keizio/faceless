@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { verifyFirebaseToken } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { ProjectService } from "../services/project";
-import { createProjectSchema } from "@faceless/shared";
-import type { CreateProjectInput } from "@faceless/shared";
+import { ContentService } from "../services/content";
+import { createProjectSchema, createContentSchema } from "@faceless/shared";
+import type { CreateProjectInput, CreateContentInput } from "@faceless/shared";
 import type { AppEnv } from "../app";
 
 export const projectRoutes = new Hono<AppEnv>();
@@ -31,6 +32,15 @@ projectRoutes.get("/:id", async (c) => {
   const service = new ProjectService();
   const project = await service.getProject(userId, id);
   return c.json({ project });
+});
+
+projectRoutes.post("/:projectId/contents", validate(createContentSchema), async (c) => {
+  const userId = c.get("userId");
+  const projectId = c.req.param("projectId")!;
+  const data = c.get("validated") as CreateContentInput;
+  const service = new ContentService();
+  const result = await service.createContent(userId, projectId, data);
+  return c.json(result, 201);
 });
 
 projectRoutes.delete("/:id", async (c) => {

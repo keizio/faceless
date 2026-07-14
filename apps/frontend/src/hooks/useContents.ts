@@ -20,8 +20,11 @@ export function useCreateContent(projectId: string) {
     mutationFn: async (body: {
       type: string;
       platform: string;
+      aspectRatio: string;
+      language: string;
       prompt: string;
       title?: string;
+      avatarId?: string;
     }) => {
       const { data } = await api.post(
         `/api/projects/${projectId}/contents`,
@@ -44,6 +47,28 @@ export function useRegenerateContent() {
     },
     onSuccess: (_, contentId) => {
       queryClient.invalidateQueries({ queryKey: ["contents", contentId] });
+    },
+  });
+}
+
+export function useDuplicateContent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      contentId,
+      language,
+    }: {
+      contentId: string;
+      language: string;
+    }) => {
+      const { data } = await api.post(
+        `/api/contents/${contentId}/duplicate`,
+        { language },
+      );
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
   });
 }
