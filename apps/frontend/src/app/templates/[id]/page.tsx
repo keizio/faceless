@@ -5,6 +5,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { TemplateForm } from "@/components/templates/TemplateForm";
 import { useTemplate } from "@/hooks/useTemplates";
 import { useProjects } from "@/hooks/useProjects";
+import { useAvatars } from "@/hooks/useAvatars";
 import { PLATFORM_SPECS, LANGUAGES } from "@faceless/shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, Loader2, ChevronLeft } from "lucide-react";
+import { Sparkles, Loader2, ChevronLeft, User } from "lucide-react";
 import Link from "next/link";
 import { use } from "react";
 import { useState, useEffect } from "react";
@@ -34,7 +35,9 @@ export default function TemplateDetailPage({
   const { data: userProfile } = useUserProfile();
   const router = useRouter();
 
+  const { data: avatars } = useAvatars();
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [selectedAvatarId, setSelectedAvatarId] = useState<string>("");
   const [selectedPlatform, setSelectedPlatform] = useState<string>(
     "generic",
   );
@@ -126,6 +129,7 @@ export default function TemplateDetailPage({
         language: selectedLanguage,
         prompt,
         title: `${template.name} - ${prompt.slice(0, 50)}`,
+        avatarId: selectedAvatarId || undefined,
         templateId: template.id,
         templateInputs,
       },
@@ -179,6 +183,28 @@ export default function TemplateDetailPage({
                         </SelectItem>
                       ),
                     )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Avatar <span className="text-muted-foreground/50">(recommended for POV)</span>
+                </label>
+                <Select value={selectedAvatarId} onValueChange={(v) => v && setSelectedAvatarId(v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="No avatar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No avatar</SelectItem>
+                    {avatars?.map((avatar: { id: string; name: string }) => (
+                      <SelectItem key={avatar.id} value={avatar.id}>
+                        <span className="flex items-center gap-2">
+                          <User className="h-3 w-3" />
+                          {avatar.name}
+                        </span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

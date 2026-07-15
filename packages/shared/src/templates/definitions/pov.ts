@@ -1,0 +1,50 @@
+import type { ContentTemplate } from "../types";
+
+export const povTemplate: ContentTemplate = {
+  id: "pov",
+  name: "POV Avatar",
+  description: "Generate a POV (Point of View) scene featuring your avatar in a specific condition or scenario. Perfect for storytelling, skits, and relatable moments.",
+  category: "narrative",
+  icon: "Eye",
+  thumbnailDescription: "Avatar character in a POV scene with 'POV: ...' text overlay",
+  supportedContentTypes: ["image", "video"],
+  supportedPlatforms: ["tiktok", "instagram", "facebook", "generic"],
+  renderMode: "ai",
+  inputFields: [
+    {
+      id: "povText",
+      label: "POV Text",
+      type: "text",
+      required: true,
+      placeholder: "e.g., POV: You just walked into the wrong room",
+    },
+    {
+      id: "condition",
+      label: "Scene Condition",
+      type: "textarea",
+      required: true,
+      placeholder: "Describe the scene, setting, and what the avatar is experiencing...",
+    },
+    {
+      id: "avatarMood",
+      label: "Avatar Mood",
+      type: "select",
+      required: false,
+      options: [
+        { value: "natural", label: "Natural" },
+        { value: "happy", label: "Happy" },
+        { value: "sad", label: "Sad" },
+        { value: "angry", label: "Angry" },
+        { value: "surprised", label: "Surprised" },
+        { value: "serious", label: "Serious" },
+        { value: "playful", label: "Playful" },
+        { value: "scared", label: "Scared" },
+        { value: "confused", label: "Confused" },
+      ],
+      defaultValue: "natural",
+    },
+  ],
+  defaultContentType: "image",
+  defaultPlatform: "tiktok",
+  defaultAspectRatio: "9:16",
+};

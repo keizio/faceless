@@ -16,6 +16,7 @@ import {
   renderFactCardTemplate,
   renderQuoteCardTemplate,
   renderSplitScreenTemplate,
+  renderPovOverlay,
 } from "../../lib/compositing/renderer.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
 
@@ -449,6 +450,16 @@ const compositeImageStep = createStep({
         const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
         const url = await uploadFile(buffer, randomFilename("png"), "image/png");
         compositedUrls.push(url);
+        break;
+      }
+
+      case "pov": {
+        for (const imageUrl of imageUrls) {
+          const bgBuffer = await downloadImageAsBuffer(imageUrl);
+          const buffer = await renderPovOverlay(templateInputs, aspectRatio, bgBuffer);
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+          compositedUrls.push(url);
+        }
         break;
       }
 

@@ -7,6 +7,7 @@ import { factCardTemplate } from "./definitions/fact-card";
 import { storytimeNarrationTemplate } from "./definitions/storytime-narration";
 import { listicleTemplate } from "./definitions/listicle";
 import { quoteCardTemplate } from "./definitions/quote-card";
+import { povTemplate } from "./definitions/pov";
 
 export const ALL_TEMPLATES: ContentTemplate[] = [
   fakeChatTemplate,
@@ -17,6 +18,7 @@ export const ALL_TEMPLATES: ContentTemplate[] = [
   storytimeNarrationTemplate,
   listicleTemplate,
   quoteCardTemplate,
+  povTemplate,
 ];
 
 export function getTemplateById(id: string): ContentTemplate | undefined {
@@ -44,6 +46,7 @@ export {
   storytimeNarrationTemplate,
   listicleTemplate,
   quoteCardTemplate,
+  povTemplate,
 };
 
 export type { ContentTemplate, TemplateCategory, RenderMode, TemplateInputField, TemplateFieldType, TemplateItemField } from "./types";

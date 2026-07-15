@@ -19,6 +19,7 @@ import {
   renderChatTemplate,
   renderSplitScreenTemplate,
   renderListicleCardTemplate,
+  renderPovOverlay,
 } from "../../lib/compositing/renderer.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
 
@@ -496,6 +497,21 @@ return {
             ...s,
             url,
           }));
+        }
+        break;
+      }
+
+      case "pov": {
+        compositedScenes = [];
+        for (const scene of scenes) {
+          const bgBuffer = await downloadImageAsBuffer(scene.url);
+          const buffer = await renderPovOverlay(templateInputs, aspectRatio, bgBuffer);
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+          compositedScenes.push({
+            url,
+            description: scene.description,
+            scenePrompt: scene.scenePrompt,
+          });
         }
         break;
       }

@@ -27,6 +27,8 @@ export function buildTemplatePrompt(
       return buildListiclePrompts(inputs);
     case "ai-music-video":
       return buildAiMusicVideoPrompts(inputs);
+    case "pov":
+      return buildPovPrompts(inputs);
     default:
       return null;
   }
@@ -324,6 +326,54 @@ RULES:
       "digits",
       "cluttered",
     ],
+  };
+}
+
+function buildPovPrompts(inputs: Record<string, unknown>): TemplatePrompts {
+  const povText = inputs.povText as string ?? "";
+  const condition = inputs.condition as string ?? "";
+  const avatarMood = inputs.avatarMood as string ?? "natural";
+
+  const moodMap: Record<string, string> = {
+    natural: "neutral, natural expression, relaxed, authentic",
+    happy: "joyful smile, bright eyes, positive energy, laughing or grinning",
+    sad: "melancholy expression, tearful eyes, downturned mouth, sorrowful",
+    angry: "furious scowl, intense glare, clenched jaw, aggressive posture",
+    surprised: "wide eyes, dropped jaw, shocked expression, frozen in place",
+    serious: "stern expression, focused gaze, tight lips, determined",
+    playful: "mischievous grin, playful eyes, cheeky smile, energetic",
+    scared: "wide eyes, fearful expression, recoiling, nervous",
+    confused: "furrowed brow, tilted head, puzzled expression, bewildered",
+  };
+
+  return {
+    systemPrompt: `You are creating a POV (Point of View) social media content piece.
+The viewer sees the scene through the eyes of the avatar character.
+Generate a POV-style scene that feels immersive and relatable.
+
+POV text: "${povText}"
+Scene condition: ${condition}
+Avatar mood: ${moodMap[avatarMood] ?? moodMap.natural}
+
+CRITICAL RULES:
+- The scene should feel like a first-person perspective of the avatar
+- Show the avatar's reaction to the situation through their expression and body language
+- The POV text will be overlaid as a chip at the top of the final output
+- Create a compelling, cinematic visual that matches the mood
+- Keep the composition clear with space for the POV text overlay at the top
+- Never include fake social media statistics or handles
+- The visual should immediately convey the scenario and the avatar's emotional reaction`,
+    visualGuidance: `POV perspective shot. First-person or over-the-shoulder angle showing the avatar's reaction to "${condition}". The avatar's mood is ${avatarMood}. Cinematic framing with the avatar's face/expression clearly visible. The top of the frame should have clear space for POV text chip overlay.`,
+    negativeAdditions: [
+      "text",
+      "words",
+      "letters",
+      "typography",
+      "cluttered",
+      "busy composition",
+      "watermark",
+    ],
+    narrationGuidance: "No narration needed for POV content. The visual and POV text overlay tell the story.",
   };
 }
 

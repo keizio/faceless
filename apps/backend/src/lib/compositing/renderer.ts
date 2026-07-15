@@ -5,6 +5,7 @@ import { overlayText } from "./text-overlay.js";
 import { ChatUIComponent } from "./templates/chat-ui.js";
 import { FactCardComponent } from "./templates/fact-card.js";
 import { QuoteCardComponent } from "./templates/quote-card.js";
+import { PovChipComponent } from "./templates/pov-chip.js";
 import type { ReactElement } from "react";
 
 export interface CompositeResult {
@@ -166,6 +167,25 @@ export async function renderSplitScreenTemplate(
   }
 
   return composited;
+}
+
+export async function renderPovOverlay(
+  inputs: Record<string, unknown>,
+  aspectRatio: string,
+  backgroundImage?: Buffer,
+): Promise<Buffer> {
+  const { width, height } = getImageDimensions(aspectRatio);
+  const povText = (inputs.povText as string) ?? "";
+
+  const chipElement = PovChipComponent({ povText, width, height }) as ReactElement;
+  const chipOverlay = await renderHtmlToImage(chipElement, width, height);
+
+  if (backgroundImage) {
+    return compositeImages(backgroundImage, [{ input: chipOverlay }]);
+  }
+
+  const base = await createBaseImage(width, height, "#1a1a2e");
+  return compositeImages(base, [{ input: chipOverlay }]);
 }
 
 export async function renderListicleCardTemplate(

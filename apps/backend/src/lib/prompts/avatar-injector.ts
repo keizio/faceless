@@ -42,7 +42,7 @@ export function renderAvatarForVisual(avatar: AvatarContext): string {
     if (avatar.age) {
       parts.push(`${avatar.age}-year-old`);
     }
-    parts.push(`character named ${avatar.name}`, "realistic face with visible facial features");
+    parts.push("realistic face with visible facial features");
   }
 
   parts.push("consistent appearance across all scenes");

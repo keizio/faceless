@@ -112,7 +112,7 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
           let sceneCount = 3;
           if (payload.templateId === "listicle") {
             sceneCount = (payload.templateInputs?.itemCount as number) ?? 5;
-          } else if (payload.templateId && ["fake-chat", "split-screen", "ugc-product-marketing"].includes(payload.templateId)) {
+          } else if (payload.templateId && ["fake-chat", "split-screen", "ugc-product-marketing", "pov"].includes(payload.templateId)) {
             sceneCount = 1;
           }
 
