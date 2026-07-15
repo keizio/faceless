@@ -25,6 +25,7 @@ const musicVideoInputSchema = z.object({
   visualStyle: z.string().default("cinematic"),
   audioSource: z.enum(["ai-generated", "upload"]).default("ai-generated"),
   audioFileUrl: z.string().optional(),
+  audioDurationMs: z.number().optional(),
 });
 
 const generateOrUseAudioStep = createStep({
@@ -50,7 +51,7 @@ const generateOrUseAudioStep = createStep({
 
     if (inputData.audioSource === "upload" && inputData.audioFileUrl) {
       audioUrl = inputData.audioFileUrl;
-      audioDurationMs = 30000;
+      audioDurationMs = inputData.audioDurationMs ?? 30000;
     } else {
       const musicProvider = getProviders().music;
       const result = await musicProvider.generate(
@@ -262,7 +263,7 @@ const generateMusicImagesStep = createStep({
         contentType: "video" as ContentType,
         platform: contextData.platform as Platform,
         aspectRatio: inputData.aspectRatio,
-        language: "en",
+        language: inputData.language,
         sceneIndex: i,
         totalScenes: inputData.sceneCount,
       };

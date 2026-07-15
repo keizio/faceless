@@ -16,7 +16,22 @@ export class OpenRouterTextProvider implements TextProvider {
     if (options.system) {
       messages.push({ role: "system", content: options.system });
     }
-    messages.push({ role: "user", content: options.prompt });
+
+    const hasImages = options.images && options.images.length > 0;
+    if (hasImages) {
+      messages.push({
+        role: "user",
+        content: [
+          { type: "text", text: options.prompt },
+          ...options.images!.map((img) => ({
+            type: "image_url",
+            image_url: { url: img.url },
+          })),
+        ],
+      });
+    } else {
+      messages.push({ role: "user", content: options.prompt });
+    }
 
     const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: "POST",

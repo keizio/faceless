@@ -12,11 +12,13 @@ import { eq } from "drizzle-orm";
 import type { Platform, ContentType } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
 import {
+  renderChatTemplate,
+  renderSplitScreenTemplate,
   renderFactCardTemplate,
   renderQuoteCardTemplate,
   renderListicleCardTemplate,
 } from "../../lib/compositing/renderer.js";
-import { uploadFile } from "../../lib/storage.js";
+import { uploadFile, randomFilename } from "../../lib/storage.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -345,9 +347,32 @@ const compositeSlideStep = createStep({
     const compositedUrls: string[] = [];
 
     switch (templateId) {
+      case "fake-chat": {
+        const buffer = await renderChatTemplate(templateInputs, aspectRatio);
+        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+        compositedUrls.push(url);
+        break;
+      }
+
+      case "split-screen": {
+        if (imageUrls.length < 2) {
+          const singleBuffer = await downloadImageAsBuffer(imageUrls[0]);
+          const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, singleBuffer, singleBuffer);
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+          compositedUrls.push(url);
+        } else {
+          const leftBuffer = await downloadImageAsBuffer(imageUrls[0]);
+          const rightBuffer = await downloadImageAsBuffer(imageUrls[1]);
+          const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+          compositedUrls.push(url);
+        }
+        break;
+      }
+
       case "listicle": {
         const items = (templateInputs.items as string[]) ?? [];
-        const itemCount = (templateInputs.itemCount as number) ?? items.length ?? imageUrls.length;
+        const itemCount = (templateInputs.itemCount as number) ?? (items.length || imageUrls.length);
         const topic = (templateInputs.topic as string) ?? "";
 
         for (let i = 0; i < itemCount; i++) {
@@ -365,7 +390,7 @@ const compositeSlideStep = createStep({
             itemCount,
             bgBuffer,
           );
-          const url = await uploadFile(buffer, `listicle-card-${i + 1}.png`, "image/png");
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedUrls.push(url);
         }
         break;
@@ -375,7 +400,7 @@ const compositeSlideStep = createStep({
         for (let i = 0; i < imageUrls.length; i++) {
           const bgBuffer = await downloadImageAsBuffer(imageUrls[i]);
           const buffer = await renderFactCardTemplate(templateInputs, aspectRatio, bgBuffer);
-          const url = await uploadFile(buffer, `fact-card-${i + 1}.png`, "image/png");
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedUrls.push(url);
         }
         break;
@@ -385,7 +410,7 @@ const compositeSlideStep = createStep({
         for (let i = 0; i < imageUrls.length; i++) {
           const bgBuffer = await downloadImageAsBuffer(imageUrls[i]);
           const buffer = await renderQuoteCardTemplate(templateInputs, aspectRatio, bgBuffer);
-          const url = await uploadFile(buffer, `quote-card-${i + 1}.png`, "image/png");
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedUrls.push(url);
         }
         break;
@@ -433,17 +458,22 @@ const saveSlideVersionStep = createStep({
   execute: async ({ inputData }) => {
     const existingVersions = await db.query.contentVersions.findMany({
       where: eq(contentVersions.contentId, inputData.contentId),
+      columns: { versionNumber: true },
     });
 
-    const versionNumber = existingVersions.length + 1;
+    const versionNumber = existingVersions.length > 0
+      ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1
+      : 1;
+
+    const isTextContent = inputData.contentType === "text";
 
     const [version] = await db
       .insert(contentVersions)
       .values({
         contentId: inputData.contentId,
         versionNumber,
-        outputUrl: inputData.compositedImageUrls[0] ?? null,
-        thumbnailUrl: inputData.compositedImageUrls[0] ?? null,
+        outputUrl: isTextContent ? null : (inputData.compositedImageUrls[0] ?? null),
+        thumbnailUrl: isTextContent ? null : (inputData.compositedImageUrls[0] ?? null),
         metadata: {
           type: inputData.contentType,
           script: inputData.script,

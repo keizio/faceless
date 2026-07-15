@@ -13,13 +13,13 @@ export async function renderHtmlToImage(
     fonts: [
       {
         name: "Inter",
-        data: await loadFontData(),
+        data: await loadFontData(400),
         weight: 400,
         style: "normal" as const,
       },
       {
         name: "Inter",
-        data: await loadFontData(),
+        data: await loadFontData(700),
         weight: 700,
         style: "normal" as const,
       },
@@ -33,13 +33,14 @@ export async function renderHtmlToImage(
   return Buffer.from(pngData.asPng());
 }
 
-let fontCache: Buffer | null = null;
+const fontCache = new Map<number, Buffer>();
 
-async function loadFontData(): Promise<Buffer> {
-  if (fontCache) return fontCache;
-  const fontUrl = "https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-400-normal.woff";
-  const response = await fetch(fontUrl);
+async function loadFontData(weight: number): Promise<Buffer> {
+  if (fontCache.has(weight)) return fontCache.get(weight)!;
+  const url = `https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-${weight}-normal.woff`;
+  const response = await fetch(url);
   const arrayBuffer = await response.arrayBuffer();
-  fontCache = Buffer.from(arrayBuffer);
-  return fontCache;
+  const buffer = Buffer.from(arrayBuffer);
+  fontCache.set(weight, buffer);
+  return buffer;
 }

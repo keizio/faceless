@@ -221,27 +221,6 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
 
     return result;
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : "Unknown error";
-
-    await db
-      .update(generationJobs)
-      .set({ status: "failed", error: errMsg, completedAt: new Date() })
-      .where(eq(generationJobs.id, jobId));
-
-    await db
-      .update(contents)
-      .set({ status: "failed" })
-      .where(eq(contents.id, contentId));
-
-    const notificationService = new NotificationService();
-    await notificationService.create(
-      userId,
-      "content_failed",
-      "Generation Failed",
-      `Your ${contentType} content generation failed: ${errMsg}`,
-      `/contents/${contentId}`,
-    );
-
     throw error;
   }
 }

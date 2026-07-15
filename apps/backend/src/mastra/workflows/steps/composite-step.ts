@@ -7,7 +7,7 @@ import {
   renderSplitScreenTemplate,
   renderListicleCardTemplate,
 } from "../../../lib/compositing/renderer.js";
-import { uploadFile } from "../../../lib/storage.js";
+import { uploadFile, randomFilename } from "../../../lib/storage.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -40,7 +40,7 @@ export const compositeStep = createStep({
     switch (templateId) {
       case "fake-chat": {
         const buffer = await renderChatTemplate(templateInputs, aspectRatio);
-        const url = await uploadFile(buffer, "chat-composite.png", "image/png");
+        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
         compositedUrls.push(url);
         break;
       }
@@ -51,7 +51,7 @@ export const compositeStep = createStep({
           bgBuffer = await downloadImageAsBuffer(generatedImageUrls[0]);
         }
         const buffer = await renderFactCardTemplate(templateInputs, aspectRatio, bgBuffer);
-        const url = await uploadFile(buffer, "fact-card-composite.png", "image/png");
+        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
         compositedUrls.push(url);
         break;
       }
@@ -62,7 +62,7 @@ export const compositeStep = createStep({
           bgBuffer = await downloadImageAsBuffer(generatedImageUrls[0]);
         }
         const buffer = await renderQuoteCardTemplate(templateInputs, aspectRatio, bgBuffer);
-        const url = await uploadFile(buffer, "quote-card-composite.png", "image/png");
+        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
         compositedUrls.push(url);
         break;
       }
@@ -74,7 +74,7 @@ export const compositeStep = createStep({
         const leftBuffer = await downloadImageAsBuffer(generatedImageUrls[0]);
         const rightBuffer = await downloadImageAsBuffer(generatedImageUrls[1]);
         const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
-        const url = await uploadFile(buffer, "split-screen-composite.png", "image/png");
+        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
         compositedUrls.push(url);
         break;
       }
@@ -99,7 +99,7 @@ export const compositeStep = createStep({
             itemCount,
             bgBuffer,
           );
-          const url = await uploadFile(buffer, `listicle-card-${i + 1}.png`, "image/png");
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedUrls.push(url);
         }
         break;

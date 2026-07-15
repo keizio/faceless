@@ -9,35 +9,35 @@ interface FactCardProps {
 
 const STYLE_CONFIGS = {
   bold: {
-    bg: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+    bg: "#1a1a2e",
     textColor: "#ffffff",
     accentColor: "#e94560",
     topicColor: "#e94560",
-    overlayBg: "rgba(0,0,0,0.6)",
+    overlayBg: "#1a1a2e",
     fontSize: 42,
   },
   minimal: {
-    bg: "linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)",
+    bg: "#f5f5f5",
     textColor: "#1a1a1a",
     accentColor: "#666666",
     topicColor: "#999999",
-    overlayBg: "rgba(255,255,255,0.85)",
+    overlayBg: "#f5f5f5",
     fontSize: 36,
   },
   neon: {
-    bg: "linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 100%)",
+    bg: "#0a0a0a",
     textColor: "#00ff88",
     accentColor: "#ff00ff",
     topicColor: "#00ff88",
-    overlayBg: "rgba(0,0,0,0.7)",
+    overlayBg: "#0a0a0a",
     fontSize: 40,
   },
   pastel: {
-    bg: "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)",
+    bg: "#ffecd2",
     textColor: "#2d3436",
     accentColor: "#e17055",
     topicColor: "#e17055",
-    overlayBg: "rgba(255,255,255,0.8)",
+    overlayBg: "#ffecd2",
     fontSize: 36,
   },
 };
@@ -51,19 +51,20 @@ export function FactCardComponent({
   height,
 }: FactCardProps) {
   const config = STYLE_CONFIGS[style];
+  const contentMaxWidth = width - 96;
 
   return (
     <div
       style={{
         width,
         height,
-        background: config.bg,
+        backgroundColor: config.bg,
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        padding: 48,
-        fontFamily: "Inter, -apple-system, sans-serif",
+        paddingLeft: 48,
+        paddingRight: 48,
       }}
     >
       <div
@@ -71,24 +72,29 @@ export function FactCardComponent({
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 24,
-          maxWidth: width - 96,
+          maxWidth: contentMaxWidth,
+          paddingLeft: 24,
+          paddingRight: 24,
+          paddingTop: 32,
+          paddingBottom: 32,
+          backgroundColor: config.overlayBg,
+          borderRadius: 16,
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
-            marginBottom: 8,
+            marginBottom: 24,
           }}
         >
           <div
             style={{
               width: 8,
               height: 8,
-              borderRadius: "50%",
+              borderRadius: 4,
               backgroundColor: config.accentColor,
+              marginRight: 8,
             }}
           />
           <span
@@ -96,8 +102,6 @@ export function FactCardComponent({
               color: config.topicColor,
               fontSize: 14,
               fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: 2,
             }}
           >
             {topic}
@@ -106,24 +110,14 @@ export function FactCardComponent({
 
         <div
           style={{
-            backgroundColor: config.overlayBg,
-            borderRadius: 16,
-            padding: "32px 24px",
-            width: "100%",
+            color: config.textColor,
+            fontSize: config.fontSize,
+            fontWeight: 700,
+            lineHeight: 1.4,
+            textAlign: "center",
           }}
         >
-          <p
-            style={{
-              color: config.textColor,
-              fontSize: config.fontSize,
-              fontWeight: 700,
-              lineHeight: 1.4,
-              textAlign: "center",
-              margin: 0,
-            }}
-          >
-            {factText}
-          </p>
+          {factText}
         </div>
 
         {source && (
@@ -132,7 +126,7 @@ export function FactCardComponent({
               color: config.accentColor,
               fontSize: 13,
               fontWeight: 500,
-              opacity: 0.8,
+              marginTop: 16,
             }}
           >
             Source: {source}

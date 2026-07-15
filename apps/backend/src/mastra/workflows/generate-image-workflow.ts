@@ -17,7 +17,7 @@ import {
   renderQuoteCardTemplate,
   renderSplitScreenTemplate,
 } from "../../lib/compositing/renderer.js";
-import { uploadFile } from "../../lib/storage.js";
+import { uploadFile, randomFilename } from "../../lib/storage.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -57,6 +57,8 @@ const enhanceImagePromptStep = createStep({
     prompt: z.string(),
     language: z.string(),
     avatarId: z.string().optional(),
+    avatarContext: z.string().optional(),
+    isFaceless: z.boolean(),
     promptMetadata: z.any(),
     templateVisualGuidance: z.string().optional(),
     templateNegativeAdditions: z.array(z.string()).optional(),
@@ -139,6 +141,8 @@ Output format: JSON with {
       prompt: inputData.prompt,
       language: inputData.language,
       avatarId: inputData.avatarId,
+      avatarContext: isFaceless ? renderNoAvatarGuidance() : renderAvatarForText(context.avatar!),
+      isFaceless,
       promptMetadata: {
         enhanced,
         context: {
@@ -167,6 +171,8 @@ const generateImageScriptStep = createStep({
     prompt: z.string(),
     language: z.string(),
     avatarId: z.string().optional(),
+    avatarContext: z.string().optional(),
+    isFaceless: z.boolean(),
     promptMetadata: z.any(),
     templateSystemPrompt: z.string().optional(),
     templateVisualGuidance: z.string().optional(),
@@ -190,15 +196,8 @@ const generateImageScriptStep = createStep({
     const textProvider = getProviders().text;
     const strategy = PLATFORM_STRATEGIES[inputData.platform as Platform] ?? PLATFORM_STRATEGIES.generic;
 
-    const isFaceless = !inputData.avatarId;
-    let avatarContext = "";
-    if (inputData.avatarId) {
-      const { buildAvatarContext } = await import("../../lib/prompts/avatar-injector.js");
-      const avatar = await buildAvatarContext(inputData.avatarId);
-      avatarContext = renderAvatarForText(avatar);
-    } else {
-      avatarContext = renderNoAvatarGuidance();
-    }
+    const isFaceless = inputData.isFaceless;
+    const avatarContext = inputData.avatarContext ?? "";
 
     const baseSystemPrompt = `You are a professional social media caption writer for faceless content.
 Generate an engaging caption for a ${inputData.platform} image post.
@@ -299,7 +298,7 @@ const generateImageStep = createStep({
         .set({
           metadata: {
             templateId: "fake-chat",
-            hasAvatar: !!inputData.userId,
+            hasAvatar: !!inputData.promptMetadata?.context?.hasAvatar,
             platform,
           },
         })
@@ -414,7 +413,7 @@ const compositeImageStep = createStep({
     switch (templateId) {
       case "fake-chat": {
         const buffer = await renderChatTemplate(templateInputs, aspectRatio);
-        const url = await uploadFile(buffer, "chat-composite.png", "image/png");
+        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
         compositedUrls.push(url);
         break;
       }
@@ -425,7 +424,7 @@ const compositeImageStep = createStep({
           bgBuffer = await downloadImageAsBuffer(imageUrls[0]);
         }
         const buffer = await renderFactCardTemplate(templateInputs, aspectRatio, bgBuffer);
-        const url = await uploadFile(buffer, "fact-card-composite.png", "image/png");
+        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
         compositedUrls.push(url);
         break;
       }
@@ -436,7 +435,7 @@ const compositeImageStep = createStep({
           bgBuffer = await downloadImageAsBuffer(imageUrls[0]);
         }
         const buffer = await renderQuoteCardTemplate(templateInputs, aspectRatio, bgBuffer);
-        const url = await uploadFile(buffer, "quote-card-composite.png", "image/png");
+        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
         compositedUrls.push(url);
         break;
       }
@@ -448,7 +447,7 @@ const compositeImageStep = createStep({
         const leftBuffer = await downloadImageAsBuffer(imageUrls[0]);
         const rightBuffer = await downloadImageAsBuffer(imageUrls[1]);
         const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
-        const url = await uploadFile(buffer, "split-screen-composite.png", "image/png");
+        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
         compositedUrls.push(url);
         break;
       }
@@ -493,9 +492,12 @@ const saveImageVersionStep = createStep({
   execute: async ({ inputData }) => {
     const existingVersions = await db.query.contentVersions.findMany({
       where: eq(contentVersions.contentId, inputData.contentId),
+      columns: { versionNumber: true },
     });
 
-    const versionNumber = existingVersions.length + 1;
+    const versionNumber = existingVersions.length > 0
+      ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1
+      : 1;
     const outputUrl = inputData.compositedImageUrls[0] ?? null;
 
     const [version] = await db

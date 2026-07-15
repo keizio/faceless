@@ -5,7 +5,7 @@ import { AvatarService } from "../services/avatar";
 import { createAvatarSchema, updateAvatarSchema } from "@faceless/shared";
 import type { CreateAvatarInput, UpdateAvatarInput } from "@faceless/shared";
 import type { AppEnv } from "../app";
-import { uploadFile } from "../lib/storage";
+import { uploadFile, randomFilename } from "../lib/storage";
 
 export const avatarRoutes = new Hono<AppEnv>();
 
@@ -40,7 +40,8 @@ avatarRoutes.post("/:id/upload", async (c) => {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const url = await uploadFile(buffer, file.name, file.type);
+  const ext = file.name.split(".").pop() ?? "png";
+const url = await uploadFile(buffer, randomFilename(ext), file.type);
 
   const avatar = await service.updateAvatar(userId, id, { referenceImageUrl: url });
   return c.json({ avatar });

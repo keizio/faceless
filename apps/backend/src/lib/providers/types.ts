@@ -14,6 +14,7 @@ export interface GenerateImageOptions {
 export interface GenerateVideoOptions {
   avatarReferenceImage?: string;
   negativePrompt?: string;
+  aspectRatio?: string;
 }
 
 export interface AudioResult {

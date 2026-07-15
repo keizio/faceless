@@ -105,7 +105,8 @@ const generateCharacterSheetStep = createStep({
       imagePrompt += `\n\nAdditional instructions: ${inputData.customPrompt}`;
     }
 
-    const characterSheetUrl = await imageProvider.generate(imagePrompt, "1080*1920");
+    const CHARACTER_SHEET_SIZE = "1080*1920";
+    const characterSheetUrl = await imageProvider.generate(imagePrompt, CHARACTER_SHEET_SIZE);
 
     await db
       .update(avatars)

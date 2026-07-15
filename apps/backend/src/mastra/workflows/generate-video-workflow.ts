@@ -20,7 +20,7 @@ import {
   renderSplitScreenTemplate,
   renderListicleCardTemplate,
 } from "../../lib/compositing/renderer.js";
-import { uploadFile } from "../../lib/storage.js";
+import { uploadFile, randomFilename } from "../../lib/storage.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -61,6 +61,8 @@ const enhanceVideoPromptStep = createStep({
     platform: z.string(),
     language: z.string(),
     avatarId: z.string().optional(),
+    avatarContext: z.string().optional(),
+    isFaceless: z.boolean(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
     templateSystemPrompt: z.string().optional(),
@@ -149,6 +151,8 @@ Output format: JSON with {
       platform: inputData.platform,
       language: inputData.language,
       avatarId: inputData.avatarId,
+      avatarContext: isFaceless ? renderNoAvatarGuidance() : renderAvatarForText(context.avatar!),
+      isFaceless,
       enhancedPrompt: enhanced,
       promptContext: contextData,
       templateSystemPrompt: inputData.templateSystemPrompt,
@@ -174,6 +178,8 @@ const generateVideoScriptStep = createStep({
     platform: z.string(),
     language: z.string(),
     avatarId: z.string().optional(),
+    avatarContext: z.string().optional(),
+    isFaceless: z.boolean(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
     templateSystemPrompt: z.string().optional(),
@@ -205,15 +211,8 @@ const generateVideoScriptStep = createStep({
     const textProvider = getProviders().text;
     const strategy = PLATFORM_STRATEGIES[inputData.platform as Platform] ?? PLATFORM_STRATEGIES.generic;
 
-    const isFaceless = !inputData.avatarId;
-    let avatarContext = "";
-    if (inputData.avatarId) {
-      const { buildAvatarContext } = await import("../../lib/prompts/avatar-injector.js");
-      const avatar = await buildAvatarContext(inputData.avatarId);
-      avatarContext = renderAvatarForText(avatar);
-    } else {
-      avatarContext = renderNoAvatarGuidance();
-    }
+    const isFaceless = inputData.isFaceless;
+    const avatarContext = inputData.avatarContext ?? "";
 
     const baseSystemPrompt = `You are a professional script writer for faceless social media videos.
 Generate an engaging script for a ${inputData.sceneCount}-scene video on ${inputData.platform}.
@@ -352,7 +351,7 @@ const generateVideoImagesStep = createStep({
         contentType: "video" as ContentType,
         platform: contextData.platform as Platform,
         aspectRatio: inputData.aspectRatio,
-        language: "en",
+        language: inputData.language,
         sceneIndex: i,
         totalScenes: inputData.sceneCount,
       };
@@ -449,30 +448,32 @@ const compositeVideoSceneStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    aspectRatio: z.string(),
   }),
   execute: async ({ inputData }) => {
     const { templateId, templateInputs, scenes, aspectRatio } = inputData;
 
     if (!templateId || !templateInputs || scenes.length === 0) {
-      return {
-        contentId: inputData.contentId,
-        userId: inputData.userId,
-        prompt: inputData.prompt,
-        scenes,
-        enhancedPrompt: inputData.enhancedPrompt,
-        promptContext: inputData.promptContext,
-        script: inputData.script,
-        caption: inputData.caption,
-        narrationText: inputData.narrationText,
-      };
-    }
+return {
+          contentId: inputData.contentId,
+          userId: inputData.userId,
+          prompt: inputData.prompt,
+          scenes,
+          enhancedPrompt: inputData.enhancedPrompt,
+          promptContext: inputData.promptContext,
+          script: inputData.script,
+          caption: inputData.caption,
+          narrationText: inputData.narrationText,
+          aspectRatio,
+        };
+      }
 
     let compositedScenes: { url: string; description: string; scenePrompt: string }[];
 
     switch (templateId) {
       case "fake-chat": {
         const buffer = await renderChatTemplate(templateInputs, aspectRatio);
-        const url = await uploadFile(buffer, "chat-composite.png", "image/png");
+        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
         compositedScenes = scenes.map((s) => ({
           ...s,
           url,
@@ -482,14 +483,15 @@ const compositeVideoSceneStep = createStep({
 
       case "split-screen": {
         if (scenes.length < 2) {
-          const buffer = await renderChatTemplate(templateInputs, aspectRatio);
-          const url = await uploadFile(buffer, "split-placeholder.png", "image/png");
+          const singleBuffer = await downloadImageAsBuffer(scenes[0].url);
+          const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, singleBuffer, singleBuffer);
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedScenes = scenes.map((s) => ({ ...s, url }));
         } else {
           const leftBuffer = await downloadImageAsBuffer(scenes[0].url);
           const rightBuffer = await downloadImageAsBuffer(scenes[1].url);
           const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
-          const url = await uploadFile(buffer, "split-screen-composite.png", "image/png");
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedScenes = scenes.map((s) => ({
             ...s,
             url,
@@ -500,7 +502,7 @@ const compositeVideoSceneStep = createStep({
 
       case "listicle": {
         const items = (templateInputs.items as string[]) ?? [];
-        const itemCount = (templateInputs.itemCount as number) ?? items.length ?? scenes.length;
+        const itemCount = (templateInputs.itemCount as number) ?? (items.length || scenes.length);
         const topic = (templateInputs.topic as string) ?? "";
         compositedScenes = [];
 
@@ -517,7 +519,7 @@ const compositeVideoSceneStep = createStep({
             itemCount,
             bgBuffer,
           );
-          const url = await uploadFile(buffer, `listicle-scene-${i + 1}.png`, "image/png");
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedScenes.push({
             url,
             description: scenes[i].description,
@@ -538,6 +540,7 @@ const compositeVideoSceneStep = createStep({
           script: inputData.script,
           caption: inputData.caption,
           narrationText: inputData.narrationText,
+          aspectRatio,
         };
     }
 
@@ -551,6 +554,7 @@ const compositeVideoSceneStep = createStep({
       script: inputData.script,
       caption: inputData.caption,
       narrationText: inputData.narrationText,
+      aspectRatio,
     };
   },
 });
@@ -574,6 +578,7 @@ const generateVideoClipsStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    aspectRatio: z.string(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -593,6 +598,8 @@ const generateVideoClipsStep = createStep({
       inputData.scenes.map((s) => ({ url: s.url, description: s.description })),
       inputData.prompt,
       contextData.avatarReferenceImageUrl,
+      undefined,
+      { aspectRatio: inputData.aspectRatio },
     );
 
     for (const videoUrl of videoUrls) {
@@ -703,9 +710,12 @@ const saveVideoVersionStep = createStep({
   execute: async ({ inputData }) => {
     const existingVersions = await db.query.contentVersions.findMany({
       where: eq(contentVersions.contentId, inputData.contentId),
+      columns: { versionNumber: true },
     });
 
-    const versionNumber = existingVersions.length + 1;
+    const versionNumber = existingVersions.length > 0
+      ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1
+      : 1;
 
     const [version] = await db
       .insert(contentVersions)

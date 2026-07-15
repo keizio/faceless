@@ -1,5 +1,5 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 
 const CDN_BASE = process.env.R2_PUBLIC_URL || "https://cdn.solutip.com";
 const BUCKET = process.env.R2_BUCKET_NAME || "faceless-media";
@@ -50,7 +50,7 @@ export async function downloadAndStoreVideoUrl(
     );
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  return uploadFile(buffer, "generated.mp4", "video/mp4");
+  return uploadFile(buffer, randomFilename("mp4"), "video/mp4");
 }
 
 export async function downloadAndStoreImageUrl(
@@ -70,7 +70,7 @@ export async function downloadAndStoreImageUrl(
   const contentType = response.headers.get("content-type") || "image/png";
   const ext = contentType.split("/")[1] || "png";
 
-  return uploadFile(buffer, `generated.${ext}`, contentType);
+  return uploadFile(buffer, randomFilename(ext), contentType);
 }
 
 export async function downloadAndStoreAudioUrl(
@@ -87,7 +87,12 @@ export async function downloadAndStoreAudioUrl(
     );
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  return uploadFile(buffer, "generated.mp3", "audio/mpeg");
+  return uploadFile(buffer, randomFilename("mp3"), "audio/mpeg");
+}
+
+export function randomFilename(ext: string): string {
+  const hash = randomBytes(16).toString("hex");
+  return `${hash}.${ext}`;
 }
 
 export function getR2PublicUrl(key: string): string {

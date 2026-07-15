@@ -1,5 +1,5 @@
-import type { TextProvider, GenerateTextOptions, ImageProvider, VideoProvider, AudioProvider, MusicProvider, AudioResult } from "./types.js";
-import { uploadFile, downloadAndStoreVideoUrl, downloadAndStoreImageUrl, downloadAndStoreAudioUrl } from "../storage.js";
+import type { TextProvider, GenerateTextOptions, ImageProvider, VideoProvider, AudioProvider, MusicProvider, AudioResult, GenerateVideoOptions } from "./types.js";
+import { uploadFile, randomFilename, downloadAndStoreVideoUrl, downloadAndStoreImageUrl, downloadAndStoreAudioUrl } from "../storage.js";
 
 const TEXT_URL =
   process.env.DASHSCOPE_TEXT_URL ??
@@ -220,7 +220,7 @@ export class DashScopeImageProvider implements ImageProvider {
     options?: { negativePrompt?: string; qualityTags?: string[] },
   ): Promise<string> {
     const parameters: Record<string, unknown> = {
-      size: size ?? "2K",
+      size: size ?? "1080*1920",
       n: 1,
     };
 
@@ -266,7 +266,7 @@ export class DashScopeImageProvider implements ImageProvider {
       if (!base64Match) throw new Error("Invalid image data URL format");
       const ext = base64Match[1] === "jpeg" ? "jpg" : base64Match[1];
       const buffer = Buffer.from(base64Match[2], "base64");
-      return uploadFile(buffer, `generated.${ext}`, `image/${ext}`);
+      return uploadFile(buffer, randomFilename(ext), `image/${ext}`);
     }
 
     return downloadAndStoreImageUrl(imageUrl);
@@ -279,9 +279,18 @@ export class DashScopeVideoProvider implements VideoProvider {
     storyboard: string,
     avatarReferenceImage?: string,
     onProgress?: (completed: number, total: number) => void,
-    _options?: { avatarReferenceImage?: string; negativePrompt?: string },
+    _options?: GenerateVideoOptions,
   ): Promise<string[]> {
     const videoUrls: string[] = [];
+
+    const resolutionMap: Record<string, string> = {
+      "9:16": "720P",
+      "16:9": "720P",
+      "1:1": "720P",
+      "4:5": "720P",
+    };
+
+    const aspectRatio = _options?.aspectRatio ?? "9:16";
 
     for (let i = 0; i < sceneImages.length; i++) {
       const scene = sceneImages[i];
@@ -300,7 +309,7 @@ export class DashScopeVideoProvider implements VideoProvider {
           media,
         },
         parameters: {
-          resolution: "720P",
+          resolution: resolutionMap[aspectRatio] ?? "720P",
           duration: 5,
         },
       };

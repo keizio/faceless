@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { verifyFirebaseToken } from "../middleware/auth.js";
-import { uploadFile } from "../lib/storage.js";
+import { uploadFile, randomFilename } from "../lib/storage.js";
 import type { AppEnv } from "../app.js";
 
 const ALLOWED_TYPES = ["audio/mpeg", "audio/wav", "audio/ogg", "audio/mp3"];
@@ -29,7 +29,7 @@ uploadRoutes.post("/audio", async (c) => {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   const ext = file.type.split("/")[1] === "mpeg" ? "mp3" : file.type.split("/")[1];
-  const url = await uploadFile(buffer, `upload.${ext}`, file.type);
+  const url = await uploadFile(buffer, randomFilename(ext), file.type);
 
   return c.json({ url });
 });

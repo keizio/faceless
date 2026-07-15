@@ -72,11 +72,8 @@ export function ChatUIComponent({
   height,
 }: ChatUIProps) {
   const colors = STYLE_CONFIGS[style];
-  const headerHeight = 64;
-  const inputHeight = 56;
-  const chatAreaHeight = height - headerHeight - inputHeight;
-  const bubbleMaxWidth = Math.floor(width * 0.7);
-  const padding = 12;
+  const scale = width / 1080;
+  const sr = (n: number) => Math.round(n * scale);
 
   return (
     <div
@@ -86,57 +83,58 @@ export function ChatUIComponent({
         backgroundColor: colors.bg,
         display: "flex",
         flexDirection: "column",
-        fontFamily: "Inter, -apple-system, sans-serif",
       }}
     >
       <div
         style={{
-          height: headerHeight,
+          height: sr(64),
           backgroundColor: colors.headerBg,
           display: "flex",
           alignItems: "center",
-          padding: "0 16px",
-          gap: 12,
+          paddingLeft: sr(16),
+          paddingRight: sr(16),
         }}
       >
         <div
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: "50%",
+            width: sr(40),
+            height: sr(40),
+            borderRadius: sr(20),
             backgroundColor: "#4a5568",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "#fff",
-            fontSize: 16,
-            fontWeight: 600,
+            marginRight: sr(12),
           }}
         >
-          {receiverName.charAt(0).toUpperCase()}
+          <span style={{ color: "#fff", fontSize: sr(16), fontWeight: 600 }}>
+            {receiverName.charAt(0).toUpperCase()}
+          </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ color: colors.headerText, fontSize: 16, fontWeight: 600 }}>
+          <span style={{ color: colors.headerText, fontSize: sr(16), fontWeight: 600 }}>
             {receiverName}
           </span>
-          <span style={{ color: colors.timeText, fontSize: 12 }}>online</span>
+          <span style={{ color: colors.timeText, fontSize: sr(12) }}>online</span>
         </div>
       </div>
 
       <div
         style={{
-          flex: 1,
-          padding: "12px 16px",
+          flexGrow: 1,
+          paddingLeft: sr(16),
+          paddingRight: sr(16),
+          paddingTop: sr(12),
+          paddingBottom: sr(12),
           display: "flex",
           flexDirection: "column",
-          gap: 4,
-          overflow: "hidden",
         }}
       >
         {messages.map((msg, i) => {
           const isRight = msg.sender === "right";
           const bubbleColor = isRight ? colors.rightBubble : colors.leftBubble;
           const textColor = isRight ? colors.rightText : colors.leftText;
+          const bubbleMaxWidth = Math.floor(width * 0.7);
 
           return (
             <div
@@ -144,18 +142,22 @@ export function ChatUIComponent({
               style={{
                 display: "flex",
                 justifyContent: isRight ? "flex-end" : "flex-start",
-                marginBottom: 2,
+                marginBottom: i < messages.length - 1 ? sr(4) : 0,
               }}
             >
               <div
                 style={{
                   backgroundColor: bubbleColor,
-                  borderRadius: isRight ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                  padding: "8px 14px",
+                  borderRadius: isRight ? `${sr(18)}px ${sr(18)}px ${sr(4)}px ${sr(18)}px` : `${sr(18)}px ${sr(18)}px ${sr(18)}px ${sr(4)}px`,
+                  paddingLeft: sr(14),
+                  paddingRight: sr(14),
+                  paddingTop: sr(8),
+                  paddingBottom: sr(8),
                   maxWidth: bubbleMaxWidth,
+                  display: "flex",
                 }}
               >
-                <span style={{ color: textColor, fontSize: 15, lineHeight: 1.4 }}>
+                <span style={{ color: textColor, fontSize: sr(15), lineHeight: 1.4 }}>
                   {msg.text}
                 </span>
               </div>
@@ -166,25 +168,27 @@ export function ChatUIComponent({
 
       <div
         style={{
-          height: inputHeight,
+          height: sr(56),
           backgroundColor: colors.headerBg,
           display: "flex",
           alignItems: "center",
-          padding: "0 16px",
+          paddingLeft: sr(16),
+          paddingRight: sr(16),
         }}
       >
         <div
           style={{
-            flex: 1,
-            height: 36,
-            borderRadius: 18,
+            flexGrow: 1,
+            height: sr(36),
+            borderRadius: sr(18),
             backgroundColor: colors.inputBg,
             display: "flex",
             alignItems: "center",
-            padding: "0 16px",
+            paddingLeft: sr(16),
+            paddingRight: sr(16),
           }}
         >
-          <span style={{ color: colors.inputText, fontSize: 14 }}>
+          <span style={{ color: colors.inputText, fontSize: sr(14) }}>
             Type a message...
           </span>
         </div>

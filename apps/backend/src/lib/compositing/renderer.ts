@@ -29,7 +29,11 @@ export async function renderChatTemplate(
   const chatStyle = (inputs.chatStyle as string) ?? "whatsapp";
   const senderName = (inputs.senderName as string) ?? "You";
   const receiverName = (inputs.receiverName as string) ?? "Friend";
-  const messages = (inputs.messages as { sender: "left" | "right"; text: string }[]) ?? [];
+  const rawMessages = (inputs.messages as { sender: string; text: string }[]) ?? [];
+  const messages: { sender: "left" | "right"; text: string }[] = rawMessages.map((m) => ({
+    sender: m.sender === "you" ? "right" : "left",
+    text: m.text,
+  }));
 
   const element = ChatUIComponent({
     messages,
