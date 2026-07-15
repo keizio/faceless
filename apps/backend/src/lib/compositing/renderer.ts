@@ -25,6 +25,7 @@ function getImageDimensions(aspectRatio: string): { width: number; height: numbe
 export async function renderChatTemplate(
   inputs: Record<string, unknown>,
   aspectRatio: string,
+  fontFamily?: string,
 ): Promise<Buffer> {
   const { width, height } = getImageDimensions(aspectRatio);
   const chatStyle = (inputs.chatStyle as string) ?? "whatsapp";
@@ -45,13 +46,14 @@ export async function renderChatTemplate(
     height,
   }) as ReactElement;
 
-  return renderHtmlToImage(element, width, height);
+  return renderHtmlToImage(element, width, height, fontFamily);
 }
 
 export async function renderFactCardTemplate(
   inputs: Record<string, unknown>,
   aspectRatio: string,
   backgroundImage?: Buffer,
+  fontFamily?: string,
 ): Promise<Buffer> {
   const { width, height } = getImageDimensions(aspectRatio);
   const factText = (inputs.factText as string) ?? "";
@@ -69,7 +71,7 @@ export async function renderFactCardTemplate(
       height,
     }) as ReactElement;
 
-    const overlay = await renderHtmlToImage(element, width, height);
+    const overlay = await renderHtmlToImage(element, width, height, fontFamily);
     return compositeImages(backgroundImage, [{ input: overlay }]);
   }
 
@@ -82,13 +84,14 @@ export async function renderFactCardTemplate(
     height,
   }) as ReactElement;
 
-  return renderHtmlToImage(element, width, height);
+  return renderHtmlToImage(element, width, height, fontFamily);
 }
 
 export async function renderQuoteCardTemplate(
   inputs: Record<string, unknown>,
   aspectRatio: string,
   backgroundImage?: Buffer,
+  fontFamily?: string,
 ): Promise<Buffer> {
   const { width, height } = getImageDimensions(aspectRatio);
   const quoteText = (inputs.quoteText as string) ?? "";
@@ -104,7 +107,7 @@ export async function renderQuoteCardTemplate(
       height,
     }) as ReactElement;
 
-    const overlay = await renderHtmlToImage(element, width, height);
+    const overlay = await renderHtmlToImage(element, width, height, fontFamily);
     return compositeImages(backgroundImage, [{ input: overlay }]);
   }
 
@@ -116,7 +119,7 @@ export async function renderQuoteCardTemplate(
     height,
   }) as ReactElement;
 
-  return renderHtmlToImage(element, width, height);
+  return renderHtmlToImage(element, width, height, fontFamily);
 }
 
 export async function renderSplitScreenTemplate(
@@ -124,6 +127,7 @@ export async function renderSplitScreenTemplate(
   aspectRatio: string,
   leftImage: Buffer,
   rightImage: Buffer,
+  fontFamily?: string,
 ): Promise<Buffer> {
   const { width, height } = getImageDimensions(aspectRatio);
   const orientation = (inputs.orientation as string) ?? "horizontal";
@@ -173,12 +177,13 @@ export async function renderPovOverlay(
   inputs: Record<string, unknown>,
   aspectRatio: string,
   backgroundImage?: Buffer,
+  fontFamily?: string,
 ): Promise<Buffer> {
   const { width, height } = getImageDimensions(aspectRatio);
   const povText = (inputs.povText as string) ?? "";
 
   const chipElement = PovChipComponent({ povText, width, height }) as ReactElement;
-  const chipOverlay = await renderHtmlToImage(chipElement, width, height);
+  const chipOverlay = await renderHtmlToImage(chipElement, width, height, fontFamily);
 
   if (backgroundImage) {
     return compositeImages(backgroundImage, [{ input: chipOverlay }]);
@@ -196,6 +201,7 @@ export async function renderListicleCardTemplate(
   itemDescription: string,
   totalItems: number,
   backgroundImage?: Buffer,
+  fontFamily?: string,
 ): Promise<Buffer> {
   const { width, height } = getImageDimensions(aspectRatio);
   const style = (inputs.style as string) ?? "numbered";

@@ -2,14 +2,14 @@ import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import { getProviders } from "../../lib/providers/factory.js";
 import { getImageSize } from "../../lib/providers/dashscope.js";
-import { buildPromptContext, assembleFinalPrompt } from "../../lib/prompts/prompt-builder.js";
+import { buildPromptContext, assembleFinalPrompt, renderBrandKitGuidance } from "../../lib/prompts/prompt-builder.js";
 import { getNegativePrompt } from "../../lib/prompts/negative-prompts.js";
 import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/avatar-injector.js";
 import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
-import type { Platform, ContentType } from "@faceless/shared";
+import type { Platform, ContentType, BrandKit } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
 import {
   renderChatTemplate,
@@ -19,6 +19,7 @@ import {
   renderListicleCardTemplate,
 } from "../../lib/compositing/renderer.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
+import { applyWatermarkToBuffer } from "../../lib/compositing/watermark.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -59,6 +60,8 @@ const buildPromptContextStep = createStep({
     prompt: z.string(),
     language: z.string(),
     avatarContext: z.string().optional(),
+    brandKitGuidance: z.string().optional(),
+    brandKitJson: z.string().optional(),
     platformGuidance: z.string(),
     slideCount: z.number().optional(),
     aspectRatio: z.string(),
@@ -89,6 +92,9 @@ const buildPromptContextStep = createStep({
       avatarContext = renderNoAvatarGuidance();
     }
 
+    const brandKitGuidance = renderBrandKitGuidance(context.brandKit);
+    const brandKitJson = context.brandKit ? JSON.stringify(context.brandKit) : undefined;
+
     return {
       contentId: inputData.contentId,
       userId: inputData.userId,
@@ -97,6 +103,8 @@ const buildPromptContextStep = createStep({
       prompt: inputData.prompt,
       language: inputData.language,
       avatarContext,
+      brandKitGuidance,
+      brandKitJson,
       platformGuidance: strategy.visualStyleGuidance,
       slideCount: inputData.slideCount,
       aspectRatio: inputData.aspectRatio,
@@ -122,6 +130,8 @@ const generateScriptStep = createStep({
     prompt: z.string(),
     language: z.string(),
     avatarContext: z.string().optional(),
+    brandKitGuidance: z.string().optional(),
+    brandKitJson: z.string().optional(),
     platformGuidance: z.string(),
     slideCount: z.number().optional(),
     aspectRatio: z.string(),
@@ -142,6 +152,7 @@ const generateScriptStep = createStep({
     script: z.string(),
     caption: z.string(),
     enhancedPrompt: z.string().optional(),
+    brandKitJson: z.string().optional(),
     slideCount: z.number().optional(),
     aspectRatio: z.string(),
     templateId: z.string().optional(),
@@ -151,6 +162,8 @@ const generateScriptStep = createStep({
     const textProvider = getProviders().text;
 
     const isFaceless = !inputData.avatarContext || inputData.avatarContext.includes("no human figures");
+
+    const brandSection = inputData.brandKitGuidance ? `\n\nBrand identity:\n${inputData.brandKitGuidance}\n\nIncorporate the brand identity naturally into the content.` : "";
 
     const baseSystemPrompt = `You are a professional script writer for faceless social media content.
 Generate an engaging script for a ${inputData.contentType} on ${inputData.platform}.
@@ -162,7 +175,7 @@ ${inputData.platformGuidance}
 ${isFaceless ? "FACELESS MODE: No human figures or faces. Focus on environment, objects, typography, and abstract visuals." : `AVATAR MODE: Write in this character's voice:\n${inputData.avatarContext}`}
 
 Language: ${inputData.language}
-
+${brandSection}
 Output format: JSON with "hook", "body", "cta", "caption" (with hashtags), and "visual_prompt" (a detailed visual description for AI image/video generation).
 
 CRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include slide numbers or scene numbering in the visual description.`;
@@ -211,6 +224,7 @@ CRITICAL: Never include fake social media statistics, follower counts, like coun
       script,
       caption,
       enhancedPrompt,
+      brandKitJson: inputData.brandKitJson,
       slideCount: inputData.slideCount,
       aspectRatio: inputData.aspectRatio,
       templateId: inputData.templateId,
@@ -231,6 +245,7 @@ const generateSlideImagesStep = createStep({
     script: z.string(),
     caption: z.string(),
     enhancedPrompt: z.string().optional(),
+    brandKitJson: z.string().optional(),
     slideCount: z.number().optional(),
     aspectRatio: z.string(),
     templateId: z.string().optional(),
@@ -243,6 +258,7 @@ const generateSlideImagesStep = createStep({
     caption: z.string(),
     imageUrls: z.array(z.string()),
     contentType: z.enum(["image", "slide", "video", "text"]),
+    brandKitJson: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     aspectRatio: z.string(),
@@ -256,6 +272,7 @@ const generateSlideImagesStep = createStep({
         caption: inputData.caption,
         imageUrls: [],
         contentType: inputData.contentType,
+        brandKitJson: inputData.brandKitJson,
         templateId: inputData.templateId,
         templateInputs: inputData.templateInputs,
         aspectRatio: inputData.aspectRatio,
@@ -301,6 +318,7 @@ const generateSlideImagesStep = createStep({
       caption: inputData.caption,
       imageUrls,
       contentType: inputData.contentType,
+      brandKitJson: inputData.brandKitJson,
       templateId: inputData.templateId,
       templateInputs: inputData.templateInputs,
       aspectRatio: inputData.aspectRatio,
@@ -318,6 +336,7 @@ const compositeSlideStep = createStep({
     caption: z.string(),
     imageUrls: z.array(z.string()),
     contentType: z.enum(["image", "slide", "video", "text"]),
+    brandKitJson: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     aspectRatio: z.string(),
@@ -425,6 +444,32 @@ const compositeSlideStep = createStep({
           caption: inputData.caption,
           contentType: inputData.contentType,
         };
+    }
+
+    let brandKit: BrandKit | undefined;
+    try {
+      if (inputData.brandKitJson) {
+        brandKit = JSON.parse(inputData.brandKitJson) as BrandKit;
+      }
+    } catch {}
+
+    if (brandKit?.logoUrl && compositedUrls.length > 0) {
+      const watermarkedUrls: string[] = [];
+      for (const url of compositedUrls) {
+        const response = await fetch(url);
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const watermarked = await applyWatermarkToBuffer(buffer, brandKit.logoUrl);
+        const newUrl = await uploadFile(watermarked, randomFilename("png"), "image/png");
+        watermarkedUrls.push(newUrl);
+      }
+      return {
+        contentId: inputData.contentId,
+        userId: inputData.userId,
+        compositedImageUrls: watermarkedUrls,
+        script: inputData.script,
+        caption: inputData.caption,
+        contentType: inputData.contentType,
+      };
     }
 
     return {

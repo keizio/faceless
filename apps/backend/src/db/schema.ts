@@ -1,3 +1,4 @@
+import type { BrandKit } from "@faceless/shared";
 import {
   pgTable,
   uuid,
@@ -71,6 +72,7 @@ export const projects = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
+    brandKit: jsonb("brand_kit").$type<BrandKit>().default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

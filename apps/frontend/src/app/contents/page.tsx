@@ -3,65 +3,143 @@
 import { AuthGuard } from "@/components/AuthGuard";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ContentCard } from "@/components/ContentCard";
-import { CardSkeleton } from "@/components/Skeleton";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { ContentCardSkeleton } from "@/components/GridSkeleton";
 import { useAllContents } from "@/hooks/useContents";
-import { Card, CardContent } from "@/components/ui/card";
-import Link from "next/link";
-import { ChevronLeft, FileText } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { FileText, Search, ListFilter, ArrowUpDown } from "lucide-react";
+import { useState, useMemo } from "react";
+
+const CONTENT_TYPE_OPTIONS = ["all", "image", "slide", "video", "text"] as const;
+const STATUS_OPTIONS = ["all", "completed", "failed", "generating", "queued"] as const;
+const SORT_OPTIONS = ["newest", "oldest"] as const;
 
 export default function ContentsPage() {
   const { data: contents, isLoading } = useAllContents();
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sort, setSort] = useState<string>("newest");
+
+  const filtered = useMemo(() => {
+    if (!contents) return [];
+    let result = [...contents];
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (c: { title?: string | null; prompt?: string | null }) =>
+          c.title?.toLowerCase().includes(q) || c.prompt?.toLowerCase().includes(q),
+      );
+    }
+    if (typeFilter !== "all") {
+      result = result.filter((c: { type: string }) => c.type === typeFilter);
+    }
+    if (statusFilter !== "all") {
+      result = result.filter((c: { status: string }) => c.status === statusFilter);
+    }
+    result.sort((a: { createdAt: string }, b: { createdAt: string }) => {
+      const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return sort === "newest" ? diff : -diff;
+    });
+    return result;
+  }, [contents, search, typeFilter, statusFilter, sort]);
 
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in space-y-6 overflow-safe-mobile">
-          {/* Header */}
-          <div>
-            <Link
-              href="/dashboard"
-              className="mb-3 inline-flex items-center gap-1 text-sm text-primary hover:underline"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Link>
-            <h1 className="text-2xl font-bold text-foreground">
-              All Content
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {contents?.length ?? 0} content items across all projects
-            </p>
+        <div className="animate-fade-in space-y-6">
+          <PageHeader
+            title="All Content"
+            subtitle={`${filtered.length} content items across all projects`}
+          />
+
+          {/* Filter bar */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by title or prompt..."
+                className="pl-9 h-9 text-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <div className="flex items-center gap-1.5">
+                <ListFilter className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Select value={typeFilter} onValueChange={(v) => v && setTypeFilter(v)}>
+                  <SelectTrigger className="h-9 w-[110px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONTENT_TYPE_OPTIONS.map((t) => (
+                      <SelectItem key={t} value={t} className="text-xs capitalize">
+                        {t === "all" ? "All Types" : t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
+                <SelectTrigger className="h-9 w-[120px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s} value={s} className="text-xs capitalize">
+                      {s === "all" ? "All Status" : s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={sort} onValueChange={(v) => v && setSort(v)}>
+                <SelectTrigger className="h-9 w-[120px] text-xs">
+                  <ArrowUpDown className="mr-1.5 h-3 w-3" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map((s) => (
+                    <SelectItem key={s} value={s} className="text-xs capitalize">
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          {/* Content list */}
+          {/* Content grid */}
           {isLoading ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 6 }).map((_, i) => (
-                <CardSkeleton key={i} />
+                <ContentCardSkeleton key={i} />
               ))}
             </div>
-          ) : contents?.length === 0 ? (
-            <Card className="flex flex-col items-center justify-center py-12 text-center border-border/50">
-              <CardContent>
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mx-auto">
-                  <FileText className="h-8 w-8 text-primary" />
-                </div>
-                <h3 className="mb-1 text-lg font-semibold text-foreground">
-                  No content yet
-                </h3>
-                <p className="mb-6 text-sm text-muted-foreground">
-                  Create content from any project to see it here
-                </p>
-                <Link href="/dashboard">
-                  <span className="text-sm text-primary hover:underline">
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon={<FileText className="h-8 w-8 text-primary" />}
+              title="No content found"
+              description={search || typeFilter !== "all" || statusFilter !== "all" ? "Try adjusting your filters or search query" : "Create content from any project to see it here"}
+              action={
+                !search && typeFilter === "all" && statusFilter === "all" ? (
+                  <a href="/dashboard" className="text-sm text-primary hover:underline">
                     Go to Dashboard
-                  </span>
-                </Link>
-              </CardContent>
-            </Card>
+                  </a>
+                ) : undefined
+              }
+            />
           ) : (
-            <div className="isometric-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-              {contents?.map(
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filtered.map(
                 (content: {
                   id: string;
                   title: string | null;

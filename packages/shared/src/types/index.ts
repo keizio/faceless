@@ -132,6 +132,24 @@ export interface Notification {
   createdAt: string;
 }
 
+export interface BrandKitColors {
+  primary: string;
+  secondary: string;
+  accent: string;
+  text?: string;
+  background?: string;
+}
+
+export interface BrandKit {
+  brandName?: string;
+  colors?: BrandKitColors;
+  logoUrl?: string;
+  fontFamily?: string;
+  brandVoice?: string;
+  defaultHashtags?: string[];
+  defaultCta?: string;
+}
+
 export interface CreateAvatarRequest {
   name: string;
   age?: number;

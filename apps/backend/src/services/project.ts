@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { projects, contents, mediaAssets } from "../db/schema";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
+import type { BrandKit } from "@faceless/shared";
 
 export class ProjectService {
   async listProjects(userId: string) {
@@ -116,5 +117,38 @@ export class ProjectService {
     await db
       .delete(projects)
       .where(and(eq(projects.id, id), eq(projects.userId, userId)));
+  }
+
+  async getBrandKit(userId: string, projectId: string): Promise<BrandKit> {
+    const [project] = await db
+      .select({ brandKit: projects.brandKit })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.userId, userId)))
+      .limit(1);
+
+    if (!project) throw new Error("Project not found");
+    return project.brandKit ?? {};
+  }
+
+  async updateBrandKit(
+    userId: string,
+    projectId: string,
+    data: Partial<BrandKit>,
+  ): Promise<BrandKit> {
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.userId, userId)))
+      .limit(1);
+
+    if (!project) throw new Error("Project not found");
+
+    const [updated] = await db
+      .update(projects)
+      .set({ brandKit: data as BrandKit })
+      .where(eq(projects.id, projectId))
+      .returning({ brandKit: projects.brandKit });
+
+    return updated.brandKit ?? {};
   }
 }

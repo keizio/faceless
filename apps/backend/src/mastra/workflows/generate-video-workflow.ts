@@ -6,6 +6,7 @@ import {
   buildPromptContext,
   assembleFinalPrompt,
   assembleScenePrompt,
+  renderBrandKitGuidance,
 } from "../../lib/prompts/prompt-builder.js";
 import { getNegativePrompt } from "../../lib/prompts/negative-prompts.js";
 import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/avatar-injector.js";
@@ -13,7 +14,7 @@ import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
-import type { Platform, ContentType } from "@faceless/shared";
+import type { Platform, ContentType, BrandKit } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
 import {
   renderChatTemplate,
@@ -22,6 +23,7 @@ import {
   renderPovOverlay,
 } from "../../lib/compositing/renderer.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
+import { applyWatermarkToBuffer } from "../../lib/compositing/watermark.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -63,6 +65,8 @@ const enhanceVideoPromptStep = createStep({
     language: z.string(),
     avatarId: z.string().optional(),
     avatarContext: z.string().optional(),
+    brandKitGuidance: z.string().optional(),
+    brandKitJson: z.string().optional(),
     isFaceless: z.boolean(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
@@ -143,6 +147,9 @@ Output format: JSON with {
       avatarReferenceImageUrl: context.avatar?.referenceImageUrl,
     };
 
+    const brandKitGuidance = renderBrandKitGuidance(context.brandKit);
+    const brandKitJson = context.brandKit ? JSON.stringify(context.brandKit) : undefined;
+
     return {
       contentId: inputData.contentId,
       userId: inputData.userId,
@@ -153,6 +160,8 @@ Output format: JSON with {
       language: inputData.language,
       avatarId: inputData.avatarId,
       avatarContext: isFaceless ? renderNoAvatarGuidance() : renderAvatarForText(context.avatar!),
+      brandKitGuidance,
+      brandKitJson,
       isFaceless,
       enhancedPrompt: enhanced,
       promptContext: contextData,
@@ -180,6 +189,8 @@ const generateVideoScriptStep = createStep({
     language: z.string(),
     avatarId: z.string().optional(),
     avatarContext: z.string().optional(),
+    brandKitGuidance: z.string().optional(),
+    brandKitJson: z.string().optional(),
     isFaceless: z.boolean(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
@@ -205,6 +216,7 @@ const generateVideoScriptStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    brandKitJson: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     templateId: z.string().optional(),
   }),
@@ -214,6 +226,8 @@ const generateVideoScriptStep = createStep({
 
     const isFaceless = inputData.isFaceless;
     const avatarContext = inputData.avatarContext ?? "";
+
+    const brandSection = inputData.brandKitGuidance ? `\n\nBrand identity:\n${inputData.brandKitGuidance}\n\nIncorporate the brand identity naturally into the content.` : "";
 
     const baseSystemPrompt = `You are a professional script writer for faceless social media videos.
 Generate an engaging script for a ${inputData.sceneCount}-scene video on ${inputData.platform}.
@@ -225,7 +239,7 @@ ${strategy.visualStyleGuidance}
 ${isFaceless ? "FACELESS MODE: No human figures or faces. Focus on environment, objects, typography, and abstract visuals." : `AVATAR MODE: Write in this character's voice:\n${avatarContext}`}
 
 Language: ${inputData.language}
-
+${brandSection}
 Output format: JSON with "hook", "body", "cta", "caption" (with hashtags), and "narration" (full voiceover text for the entire video).
 
 CRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include scene numbering in the visual description.`;
@@ -280,6 +294,7 @@ CRITICAL: Never include fake social media statistics, follower counts, like coun
       script,
       caption,
       narrationText,
+      brandKitJson: inputData.brandKitJson,
       templateInputs: inputData.templateInputs,
       templateId: inputData.templateId,
     };
@@ -303,6 +318,7 @@ const generateVideoImagesStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    brandKitJson: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     templateId: z.string().optional(),
   }),
@@ -322,6 +338,7 @@ const generateVideoImagesStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    brandKitJson: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     templateId: z.string().optional(),
     aspectRatio: z.string(),
@@ -403,6 +420,7 @@ const generateVideoImagesStep = createStep({
       script: inputData.script,
       caption: inputData.caption,
       narrationText: inputData.narrationText,
+      brandKitJson: inputData.brandKitJson,
       templateInputs: inputData.templateInputs,
       templateId: inputData.templateId,
       aspectRatio: inputData.aspectRatio,
@@ -429,6 +447,7 @@ const compositeVideoSceneStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    brandKitJson: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     templateId: z.string().optional(),
     aspectRatio: z.string(),
@@ -454,117 +473,117 @@ const compositeVideoSceneStep = createStep({
   execute: async ({ inputData }) => {
     const { templateId, templateInputs, scenes, aspectRatio } = inputData;
 
-    if (!templateId || !templateInputs || scenes.length === 0) {
-return {
-          contentId: inputData.contentId,
-          userId: inputData.userId,
-          prompt: inputData.prompt,
-          scenes,
-          enhancedPrompt: inputData.enhancedPrompt,
-          promptContext: inputData.promptContext,
-          script: inputData.script,
-          caption: inputData.caption,
-          narrationText: inputData.narrationText,
-          aspectRatio,
-        };
-      }
+    let resultScenes = scenes;
 
-    let compositedScenes: { url: string; description: string; scenePrompt: string }[];
+    if (templateId && templateInputs && scenes.length > 0) {
+      let compositedScenes: { url: string; description: string; scenePrompt: string }[];
 
-    switch (templateId) {
-      case "fake-chat": {
-        const buffer = await renderChatTemplate(templateInputs, aspectRatio);
-        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-        compositedScenes = scenes.map((s) => ({
-          ...s,
-          url,
-        }));
-        break;
-      }
-
-      case "split-screen": {
-        if (scenes.length < 2) {
-          const singleBuffer = await downloadImageAsBuffer(scenes[0].url);
-          const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, singleBuffer, singleBuffer);
-          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-          compositedScenes = scenes.map((s) => ({ ...s, url }));
-        } else {
-          const leftBuffer = await downloadImageAsBuffer(scenes[0].url);
-          const rightBuffer = await downloadImageAsBuffer(scenes[1].url);
-          const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
+      switch (templateId) {
+        case "fake-chat": {
+          const buffer = await renderChatTemplate(templateInputs, aspectRatio);
           const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedScenes = scenes.map((s) => ({
             ...s,
             url,
           }));
+          break;
         }
-        break;
+
+        case "split-screen": {
+          if (scenes.length < 2) {
+            const singleBuffer = await downloadImageAsBuffer(scenes[0].url);
+            const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, singleBuffer, singleBuffer);
+            const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+            compositedScenes = scenes.map((s) => ({ ...s, url }));
+          } else {
+            const leftBuffer = await downloadImageAsBuffer(scenes[0].url);
+            const rightBuffer = await downloadImageAsBuffer(scenes[1].url);
+            const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
+            const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+            compositedScenes = scenes.map((s) => ({
+              ...s,
+              url,
+            }));
+          }
+          break;
+        }
+
+        case "pov": {
+          compositedScenes = [];
+          for (const scene of scenes) {
+            const bgBuffer = await downloadImageAsBuffer(scene.url);
+            const buffer = await renderPovOverlay(templateInputs, aspectRatio, bgBuffer);
+            const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+            compositedScenes.push({
+              url,
+              description: scene.description,
+              scenePrompt: scene.scenePrompt,
+            });
+          }
+          break;
+        }
+
+        case "listicle": {
+          const items = (templateInputs.items as string[]) ?? [];
+          const itemCount = (templateInputs.itemCount as number) ?? (items.length || scenes.length);
+          const topic = (templateInputs.topic as string) ?? "";
+          compositedScenes = [];
+
+          for (let i = 0; i < scenes.length; i++) {
+            const itemTitle = items[i] ?? `Item ${i + 1}`;
+            const itemDescription = `Description for ${itemTitle}`;
+            const bgBuffer = await downloadImageAsBuffer(scenes[i].url);
+            const buffer = await renderListicleCardTemplate(
+              templateInputs,
+              aspectRatio,
+              i + 1,
+              itemTitle,
+              itemDescription,
+              itemCount,
+              bgBuffer,
+            );
+            const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+            compositedScenes.push({
+              url,
+              description: scenes[i].description,
+              scenePrompt: scenes[i].scenePrompt,
+            });
+          }
+          break;
+        }
+
+        default:
+          compositedScenes = scenes;
+          break;
       }
 
-      case "pov": {
-        compositedScenes = [];
-        for (const scene of scenes) {
-          const bgBuffer = await downloadImageAsBuffer(scene.url);
-          const buffer = await renderPovOverlay(templateInputs, aspectRatio, bgBuffer);
-          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-          compositedScenes.push({
-            url,
-            description: scene.description,
-            scenePrompt: scene.scenePrompt,
-          });
-        }
-        break;
+      resultScenes = compositedScenes;
+    }
+
+    let brandKit: BrandKit | undefined;
+    try {
+      if (inputData.brandKitJson) {
+        brandKit = JSON.parse(inputData.brandKitJson) as BrandKit;
       }
+    } catch {}
 
-      case "listicle": {
-        const items = (templateInputs.items as string[]) ?? [];
-        const itemCount = (templateInputs.itemCount as number) ?? (items.length || scenes.length);
-        const topic = (templateInputs.topic as string) ?? "";
-        compositedScenes = [];
-
-        for (let i = 0; i < scenes.length; i++) {
-          const itemTitle = items[i] ?? `Item ${i + 1}`;
-          const itemDescription = `Description for ${itemTitle}`;
-          const bgBuffer = await downloadImageAsBuffer(scenes[i].url);
-          const buffer = await renderListicleCardTemplate(
-            templateInputs,
-            aspectRatio,
-            i + 1,
-            itemTitle,
-            itemDescription,
-            itemCount,
-            bgBuffer,
-          );
-          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-          compositedScenes.push({
-            url,
-            description: scenes[i].description,
-            scenePrompt: scenes[i].scenePrompt,
-          });
-        }
-        break;
+    if (brandKit?.logoUrl && resultScenes.length > 0) {
+      const watermarkedScenes: { url: string; description: string; scenePrompt: string }[] = [];
+      for (const scene of resultScenes) {
+        const response = await fetch(scene.url);
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const watermarked = await applyWatermarkToBuffer(buffer, brandKit.logoUrl);
+        const newUrl = await uploadFile(watermarked, randomFilename("png"), "image/png");
+        watermarkedScenes.push({ ...scene, url: newUrl });
       }
-
-      default:
-        return {
-          contentId: inputData.contentId,
-          userId: inputData.userId,
-          prompt: inputData.prompt,
-          scenes,
-          enhancedPrompt: inputData.enhancedPrompt,
-          promptContext: inputData.promptContext,
-          script: inputData.script,
-          caption: inputData.caption,
-          narrationText: inputData.narrationText,
-          aspectRatio,
-        };
+      resultScenes = watermarkedScenes;
     }
 
     return {
       contentId: inputData.contentId,
       userId: inputData.userId,
       prompt: inputData.prompt,
-      scenes: compositedScenes,
+      scenes: resultScenes,
       enhancedPrompt: inputData.enhancedPrompt,
       promptContext: inputData.promptContext,
       script: inputData.script,

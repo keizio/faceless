@@ -1,6 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { dashscopeImageTool } from "../mastra/tools/dashscope-image-tool.js";
+import { webSearchTool } from "../mastra/tools/web-search-tool.js";
 import type { Mastra } from "@mastra/core/mastra";
 
 const openrouter = createOpenAICompatible({
@@ -15,6 +16,8 @@ const llm = openrouter(TEXT_MODEL);
 export const scriptWriterAgent: Agent = new Agent({
   name: "Script Writer",
   instructions: `You are a professional script writer for faceless social media content.
+
+You have access to a web search tool. Use it to research topics, find current trends, verify facts, gather statistics, and look up relevant information before writing scripts. Always research the topic first to ensure your script is accurate, timely, and well-informed.
 
 Given a topic, niche, target platform, and optional avatar persona, generate an engaging script.
 
@@ -44,6 +47,7 @@ Output format: JSON with {
   "caption": string (with hashtags)
 }`,
   model: llm,
+  tools: { webSearchTool },
 });
 
 export const mediaSelectorAgent: Agent = new Agent({

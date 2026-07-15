@@ -26,7 +26,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, use, useRef, useEffect } from "react";
 import {
-  ChevronLeft,
   User,
   Sparkles,
   Trash2,
@@ -111,7 +110,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in space-y-6 overflow-safe-mobile">
+        <div className="animate-fade-in">
           {isLoading ? (
             <div className="space-y-4">
               <div className="skeleton h-8 w-64 rounded-lg bg-muted" />
@@ -121,14 +120,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
           ) : avatar ? (
             <>
               {/* Header */}
-              <div>
-                <Link
-                  href="/avatars"
-                  className="mb-3 inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Back to Avatars
-                </Link>
+              <div className="mb-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <h1 className="text-2xl font-bold text-foreground">
                     {avatar.name}
@@ -157,186 +149,194 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
 
-              {/* Avatar preview */}
-              <Card className="depth-3 border-border/50">
-                <CardContent className="p-5">
-                  <div className="flex flex-col sm:flex-row items-start gap-6">
-                    <div className="flex h-16 w-16 sm:h-24 sm:w-24 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-[hsl(var(--accent-secondary))]/20 float-3d">
-                      {avatar.referenceImageUrl ? (
-                        <img
-                          src={avatar.referenceImageUrl}
-                          alt={avatar.name}
-                          className="h-16 w-16 sm:h-24 sm:w-24 rounded-xl object-cover"
-                        />
-                      ) : (
-                        <User className="h-8 w-8 text-primary" />
-                      )}
-                    </div>
-                    <div className="flex-1 space-y-2 min-w-0">
-                      {avatar.characterSheetUrl && (
-                        <div className="flex items-center gap-2 text-sm text-[hsl(var(--success))]">
-                          <Check className="h-4 w-4" />
-                          Character sheet generated
-                        </div>
-                      )}
-                      {avatar.speechStyle && (
-                        <p className="text-sm text-muted-foreground">
-                          <span className="text-muted-foreground/70">Speech style:</span>{" "}
-                          {SPEECH_STYLE_LABELS[avatar.speechStyle as keyof typeof SPEECH_STYLE_LABELS] || avatar.speechStyle}
-                        </p>
-                      )}
-                      {(avatar.age || avatar.gender) && (
-                        <p className="text-sm text-muted-foreground">
-                          <span className="text-muted-foreground/70">Profile:</span>{" "}
-                          {[getAgeRangeLabel(avatar.age), avatar.gender].filter(Boolean).join(", ")}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Generation progress */}
-              {activeJobId && (
-                <GenerationProgress jobId={activeJobId} />
-              )}
-
-              {/* Character sheet */}
-              {avatar.characterSheetUrl && (
-                <Card className="glass depth-2 border-border/50">
-                  <CardContent className="p-5">
-                    <h2 className="mb-3 text-sm font-semibold text-foreground">
-                      <Sparkles className="mr-2 inline h-4 w-4 text-primary" />
-                      Character Sheet
-                    </h2>
-                    <img
-                      src={avatar.characterSheetUrl}
-                      alt={`${avatar.name} character sheet`}
-                      className="w-full max-w-2xl rounded-lg"
-                    />
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Edit form */}
-              <Card className="border-border/50">
-                <CardContent className="p-4 sm:p-5">
-                  <h2 className="mb-3 text-sm font-semibold text-foreground">
-                    Edit Avatar
-                  </h2>
-                  <div className="space-y-3.5">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                        Name
-                      </label>
-                      <Input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="Avatar name"
-                        className="h-9"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                          Age Range
-                        </label>
-                        <Select value={age} onValueChange={(v) => v && setAge(v)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Age" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {AGE_RANGES.map((r) => (
-                              <SelectItem key={String(r.value)} value={String(r.value)}>
-                                {r.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                          Gender
-                        </label>
-                        <Select value={gender} onValueChange={(v) => v && setGender(v)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Gender" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {GENDER_OPTIONS.map((g: string) => (
-                              <SelectItem key={g} value={g}>
-                                {g}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                          Speech Style
-                        </label>
-                        <Select value={speechStyle} onValueChange={(v) => v && setSpeechStyle(v)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Style" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SPEECH_STYLES.map((s) => (
-                              <SelectItem key={s} value={s}>
-                                {SPEECH_STYLE_LABELS[s as keyof typeof SPEECH_STYLE_LABELS]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                        Reference Image
-                      </label>
-                      <div className="flex gap-2">
-                        <Input
-                          type="url"
-                          value={imageUrl}
-                          onChange={(e) => setImageUrl(e.target.value)}
-                          placeholder="https://cdn.solutip.com/..."
-                          className="flex-1 h-9 text-sm"
-                        />
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleFileSelect}
-                        />
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={uploadAvatarImage.isPending}
-                          title="Upload image"
-                        >
-                          {uploadAvatarImage.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+              {/* Two-column layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                {/* Left: Preview & Character Sheet */}
+                <div className="lg:col-span-2 space-y-6 lg:sticky lg:top-0 lg:self-start">
+                  {/* Avatar preview */}
+                  <Card className="depth-3 border-border/50">
+                    <CardContent className="p-5">
+                      <div className="flex flex-col sm:flex-row items-start gap-6">
+                        <div className="flex h-16 w-16 sm:h-24 sm:w-24 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-[hsl(var(--accent-secondary))]/20 float-3d">
+                          {avatar.referenceImageUrl ? (
+                            <img
+                              src={avatar.referenceImageUrl}
+                              alt={avatar.name}
+                              className="h-16 w-16 sm:h-24 sm:w-24 rounded-xl object-cover"
+                            />
                           ) : (
-                            <Upload className="h-4 w-4" />
+                            <User className="h-8 w-8 text-primary" />
                           )}
-                        </Button>
+                        </div>
+                        <div className="flex-1 space-y-2 min-w-0">
+                          {avatar.characterSheetUrl && (
+                            <div className="flex items-center gap-2 text-sm text-[hsl(var(--success))]">
+                              <Check className="h-4 w-4" />
+                              Character sheet generated
+                            </div>
+                          )}
+                          {avatar.speechStyle && (
+                            <p className="text-sm text-muted-foreground">
+                              <span className="text-muted-foreground/70">Speech style:</span>{" "}
+                              {SPEECH_STYLE_LABELS[avatar.speechStyle as keyof typeof SPEECH_STYLE_LABELS] || avatar.speechStyle}
+                            </p>
+                          )}
+                          {(avatar.age || avatar.gender) && (
+                            <p className="text-sm text-muted-foreground">
+                              <span className="text-muted-foreground/70">Profile:</span>{" "}
+                              {[getAgeRangeLabel(avatar.age), avatar.gender].filter(Boolean).join(", ")}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex justify-end gap-3 pt-1">
-                      <Button
-                        onClick={handleSave}
-                        disabled={updateAvatar.isPending || !name.trim() || uploadAvatarImage.isPending}
-                        size="sm"
-                      >
-                        {updateAvatar.isPending ? "Saving..." : "Save"}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                    </CardContent>
+                  </Card>
+
+                  {/* Generation progress */}
+                  {activeJobId && (
+                    <GenerationProgress jobId={activeJobId} />
+                  )}
+
+                  {/* Character sheet */}
+                  {avatar.characterSheetUrl && (
+                    <Card className="glass depth-2 border-border/50">
+                      <CardContent className="p-5">
+                        <h2 className="mb-3 text-sm font-semibold text-foreground">
+                          <Sparkles className="mr-2 inline h-4 w-4 text-primary" />
+                          Character Sheet
+                        </h2>
+                        <img
+                          src={avatar.characterSheetUrl}
+                          alt={`${avatar.name} character sheet`}
+                          className="w-full max-w-2xl rounded-lg"
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+
+                {/* Right: Edit form */}
+                <div className="lg:col-span-3">
+                  <Card className="border-border/50">
+                    <CardContent className="p-4 sm:p-5">
+                      <h2 className="mb-3 text-sm font-semibold text-foreground">
+                        Edit Avatar
+                      </h2>
+                      <div className="space-y-3.5">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                            Name
+                          </label>
+                          <Input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="Avatar name"
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                              Age Range
+                            </label>
+                            <Select value={age} onValueChange={(v) => v && setAge(v)}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Age" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {AGE_RANGES.map((r: { value: number; label: string }) => (
+                                  <SelectItem key={String(r.value)} value={String(r.value)}>
+                                    {r.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                              Gender
+                            </label>
+                            <Select value={gender} onValueChange={(v) => v && setGender(v)}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Gender" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {GENDER_OPTIONS.map((g: string) => (
+                                  <SelectItem key={g} value={g}>
+                                    {g}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                              Speech Style
+                            </label>
+                            <Select value={speechStyle} onValueChange={(v) => v && setSpeechStyle(v)}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Style" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {SPEECH_STYLES.map((s) => (
+                                  <SelectItem key={s} value={s}>
+                                    {SPEECH_STYLE_LABELS[s as keyof typeof SPEECH_STYLE_LABELS]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                            Reference Image
+                          </label>
+                          <div className="flex gap-2">
+                            <Input
+                              type="url"
+                              value={imageUrl}
+                              onChange={(e) => setImageUrl(e.target.value)}
+                              placeholder="https://cdn.solutip.com/..."
+                              className="flex-1 h-9 text-sm"
+                            />
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleFileSelect}
+                            />
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-9 w-9 shrink-0"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={uploadAvatarImage.isPending}
+                              title="Upload image"
+                            >
+                              {uploadAvatarImage.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-3 pt-1">
+                          <Button
+                            onClick={handleSave}
+                            disabled={updateAvatar.isPending || !name.trim() || uploadAvatarImage.isPending}
+                            size="sm"
+                          >
+                            {updateAvatar.isPending ? "Saving..." : "Save"}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
 
               {/* Delete confirm dialog */}
               <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
@@ -348,20 +348,8 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                     </DialogDescription>
                   </DialogHeader>
                   <div className="flex justify-end gap-3 pt-2">
-                    <Button
-                      onClick={() => setShowDeleteConfirm(false)}
-                      variant="outline"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        handleDelete();
-                        setShowDeleteConfirm(false);
-                      }}
-                      variant="destructive"
-                      disabled={deleteAvatar.isPending}
-                    >
+                    <Button onClick={() => setShowDeleteConfirm(false)} variant="outline">Cancel</Button>
+                    <Button onClick={() => { handleDelete(); setShowDeleteConfirm(false); }} variant="destructive" disabled={deleteAvatar.isPending}>
                       {deleteAvatar.isPending ? "Deleting..." : "Delete"}
                     </Button>
                   </div>

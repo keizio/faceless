@@ -3,11 +3,20 @@
 import { AuthGuard } from "@/components/AuthGuard";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { StatsCard } from "@/components/StatsCard";
-import { CardSkeleton } from "@/components/Skeleton";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { ProjectGridSkeleton } from "@/components/GridSkeleton";
 import { useCreateProject, useProjects } from "@/hooks/useProjects";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import Link from "next/link";
 import { useState } from "react";
 import {
@@ -18,24 +27,28 @@ import {
   Plus,
   ChevronRight,
   Sparkles,
+  ChevronLeft,
+  ChevronRight as ChevronRightIcon,
 } from "lucide-react";
 import { useTemplates } from "@/hooks/useTemplates";
 import { TemplateCard } from "@/components/templates/TemplateCard";
 import { CreateContentForm } from "@/components/CreateContentForm";
+import { useRef } from "react";
 
 export default function DashboardPage() {
   const { data: projects, isLoading } = useProjects();
   const { data: templates } = useTemplates();
   const createProject = useCreateProject();
-  const [showForm, setShowForm] = useState(false);
+  const [showNewProject, setShowNewProject] = useState(false);
   const [showCreateContent, setShowCreateContent] = useState(false);
   const [name, setName] = useState("");
+  const templateScrollRef = useRef<HTMLDivElement>(null);
 
   const handleCreate = () => {
     if (!name.trim()) return;
     createProject.mutate(
       { name },
-      { onSuccess: () => { setName(""); setShowForm(false); } },
+      { onSuccess: () => { setName(""); setShowNewProject(false); } },
     );
   };
 
@@ -44,46 +57,48 @@ export default function DashboardPage() {
     0,
   ) ?? 0;
 
+  const scrollTemplates = (direction: "left" | "right") => {
+    if (!templateScrollRef.current) return;
+    const scrollAmount = 300;
+    templateScrollRef.current.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
+  };
+
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in space-y-8 overflow-safe-mobile">
-          {/* Header */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Welcome back to your content studio
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button
-                onClick={() => {
-                  setShowCreateContent(!showCreateContent);
-                  if (!showCreateContent) setShowForm(false);
-                }}
-                variant="ghost"
-                className={"text-primary"}
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Create Content</span>
-                <span className="sm:hidden">Content</span>
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowForm(!showForm);
-                  if (!showForm) setShowCreateContent(false);
-                }}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">New Project</span>
-                <span className="sm:hidden">New</span>
-              </Button>
-            </div>
-          </div>
+        <div className="animate-fade-in space-y-8">
+          <PageHeader
+            title="Dashboard"
+            subtitle="Welcome back to your content studio"
+            actions={
+              <>
+                <Button
+                  onClick={() => {
+                    setShowCreateContent(true);
+                  }}
+                  variant="ghost"
+                  className="text-primary"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Create Content</span>
+                  <span className="sm:hidden">Content</span>
+                </Button>
+                <Button
+                  onClick={() => setShowNewProject(true)}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">New Project</span>
+                  <span className="sm:hidden">New</span>
+                </Button>
+              </>
+            }
+          />
 
           {/* Stats cards */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 sm:gap-4">
             <StatsCard
               icon={<Folder className="h-5 w-5 text-primary" />}
               label="Total Projects"
@@ -110,49 +125,6 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* New project form */}
-          {showForm && (
-            <Card className="animate-slide-in border-border/50">
-              <CardContent className="p-4">
-                <h3 className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wider">
-                  New Project
-                </h3>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Project name..."
-                    autoFocus
-                    onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                    className="flex-1 h-8 text-sm"
-                  />
-                  <Button
-                    onClick={handleCreate}
-                    disabled={createProject.isPending || !name.trim()}
-                    size="sm"
-                  >
-                    {createProject.isPending ? "Creating..." : "Create"}
-                  </Button>
-                  <Button
-                    onClick={() => setShowForm(false)}
-                    variant="ghost"
-                    size="sm"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Create content form */}
-          {showCreateContent && (
-            <div className="animate-slide-in">
-              <CreateContentForm onSuccess={() => setShowCreateContent(false)} />
-            </div>
-          )}
-
           {/* Templates */}
           {templates && templates.length > 0 && (
             <section>
@@ -160,23 +132,50 @@ export default function DashboardPage() {
                 <h2 className="text-lg font-semibold text-foreground">
                   Templates
                 </h2>
-                <Link
-                  href="/templates"
-                  className="text-sm text-primary hover:underline"
-                >
-                  Browse all
-                </Link>
-              </div>
-              <div className="flex gap-4 overflow-x-auto pb-2">
-                {templates.slice(0, 4).map((template) => (
-                  <Link
-                    key={template.id}
-                    href={`/templates/${template.id}`}
-                    className="w-72 shrink-0"
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => scrollTemplates("left")}
+                    aria-label="Scroll templates left"
                   >
-                    <TemplateCard template={template} />
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => scrollTemplates("right")}
+                    aria-label="Scroll templates right"
+                  >
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </Button>
+                  <Link
+                    href="/templates"
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Browse all
                   </Link>
-                ))}
+                </div>
+              </div>
+              <div className="relative">
+                <div
+                  ref={templateScrollRef}
+                  className="flex gap-4 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory"
+                  style={{ scrollbarWidth: "none" }}
+                >
+                  {templates.slice(0, 4).map((template) => (
+                    <Link
+                      key={template.id}
+                      href={`/templates/${template.id}`}
+                      className="w-72 shrink-0 snap-start"
+                    >
+                      <TemplateCard template={template} />
+                    </Link>
+                  ))}
+                </div>
+                <div className="pointer-events-none absolute right-0 top-0 bottom-2 w-16 bg-gradient-to-l from-background to-transparent" />
               </div>
             </section>
           )}
@@ -198,28 +197,14 @@ export default function DashboardPage() {
             </div>
 
             {isLoading ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <CardSkeleton key={i} />
-                ))}
-              </div>
+              <ProjectGridSkeleton count={3} />
             ) : projects?.length === 0 ? (
-              <Card className="flex flex-col items-center justify-center py-12 text-center border-border/50">
-                <CardContent>
-                  <div className="mb-4 flex h-16 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-primary/10 mx-auto">
-                    <Folder className="h-8 w-8 text-primary" />
-                  </div>
-                  <h3 className="mb-1 text-lg font-semibold text-foreground">
-                    No projects yet
-                  </h3>
-                  <p className="mb-6 text-sm text-muted-foreground">
-                    Create your first project to start generating content
-                  </p>
-                  <Button onClick={() => setShowForm(true)}>
-                    Create Your First Project
-                  </Button>
-                </CardContent>
-              </Card>
+              <EmptyState
+                icon={<Folder className="h-8 w-8 text-primary" />}
+                title="No projects yet"
+                description="Create your first project to start generating content"
+                action={<Button onClick={() => setShowNewProject(true)}>Create Your First Project</Button>}
+              />
             ) : (
               <div className="isometric-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {projects?.map(
@@ -283,6 +268,55 @@ export default function DashboardPage() {
             )}
           </section>
         </div>
+
+        {/* New Project Dialog */}
+        <Dialog open={showNewProject} onOpenChange={setShowNewProject}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>New Project</DialogTitle>
+              <DialogDescription>
+                Create a new project to organize your content generation.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Project name..."
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  onClick={() => setShowNewProject(false)}
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreate}
+                  disabled={createProject.isPending || !name.trim()}
+                >
+                  {createProject.isPending ? "Creating..." : "Create"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create Content Dialog */}
+        <Dialog open={showCreateContent} onOpenChange={setShowCreateContent}>
+          <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Create Content</DialogTitle>
+              <DialogDescription>
+                Generate new AI-powered content for your projects.
+              </DialogDescription>
+            </DialogHeader>
+            <CreateContentForm onSuccess={() => setShowCreateContent(false)} />
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
     </AuthGuard>
   );

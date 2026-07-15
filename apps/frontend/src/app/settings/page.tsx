@@ -2,6 +2,7 @@
 
 import { AuthGuard } from "@/components/AuthGuard";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { PageHeader } from "@/components/PageHeader";
 import { useUserProfile, useUpdateLanguage } from "@/hooks/useUserProfile";
 import { LANGUAGES } from "@faceless/shared";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Settings, Save } from "lucide-react";
+
+import { Save, Globe, Bell, Key, Moon, User } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function SettingsPage() {
@@ -29,7 +31,7 @@ export default function SettingsPage() {
 
   const currentLanguage = selectedLanguage ?? user?.language ?? "en";
 
-  const handleSave = () => {
+  const handleSaveLanguage = () => {
     if (selectedLanguage && selectedLanguage !== user?.language) {
       updateLanguage.mutate(selectedLanguage);
     }
@@ -38,21 +40,18 @@ export default function SettingsPage() {
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in space-y-8 overflow-safe-mobile">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Manage your preferences
-              </p>
-            </div>
-          </div>
+        <div className="animate-fade-in space-y-8">
+          <PageHeader
+            title="Settings"
+            subtitle="Manage your preferences"
+          />
 
+          {/* Language Preference */}
           <Card className="border-border/50">
             <CardContent className="p-5">
               <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
-                <Settings className="h-4 w-4 text-primary" />
-                Language Preference
+                <Globe className="h-4 w-4 text-primary" />
+                Language
               </h3>
               <div className="space-y-4">
                 <div>
@@ -71,7 +70,7 @@ export default function SettingsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {LANGUAGES.map((lang) => (
+                      {LANGUAGES.map((lang: { code: string; label: string }) => (
                         <SelectItem key={lang.code} value={lang.code}>
                           {lang.label}
                         </SelectItem>
@@ -81,11 +80,8 @@ export default function SettingsPage() {
                 </div>
 
                 <Button
-                  onClick={handleSave}
-                  disabled={
-                    selectedLanguage === user?.language ||
-                    updateLanguage.isPending
-                  }
+                  onClick={handleSaveLanguage}
+                  disabled={selectedLanguage === user?.language || updateLanguage.isPending}
                   className="gap-2"
                 >
                   <Save className="h-4 w-4" />
@@ -93,11 +89,53 @@ export default function SettingsPage() {
                 </Button>
 
                 {updateLanguage.isSuccess && (
-                  <p className="text-xs text-green-600">
-                    Language preference updated.
-                  </p>
+                  <p className="text-xs text-green-600">Language preference updated.</p>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Account (placeholder) */}
+          <Card className="border-border/50 opacity-60">
+            <CardContent className="p-5">
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
+                <User className="h-4 w-4 text-primary" />
+                Account
+              </h3>
+              <p className="text-sm text-muted-foreground">Account settings coming soon — profile management, email preferences, and account deletion.</p>
+            </CardContent>
+          </Card>
+
+          {/* Notifications (placeholder) */}
+          <Card className="border-border/50 opacity-60">
+            <CardContent className="p-5">
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
+                <Bell className="h-4 w-4 text-primary" />
+                Notifications
+              </h3>
+              <p className="text-sm text-muted-foreground">Notification preferences coming soon — choose which events trigger alerts.</p>
+            </CardContent>
+          </Card>
+
+          {/* API Keys (placeholder) */}
+          <Card className="border-border/50 opacity-60">
+            <CardContent className="p-5">
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
+                <Key className="h-4 w-4 text-primary" />
+                API Keys
+              </h3>
+              <p className="text-sm text-muted-foreground">API key management coming soon — generate and manage API keys for programmatic access.</p>
+            </CardContent>
+          </Card>
+
+          {/* Appearance (placeholder) */}
+          <Card className="border-border/50 opacity-60">
+            <CardContent className="p-5">
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
+                <Moon className="h-4 w-4 text-primary" />
+                Appearance
+              </h3>
+              <p className="text-sm text-muted-foreground">Theme and display settings coming soon — toggle between dark and light mode.</p>
             </CardContent>
           </Card>
         </div>

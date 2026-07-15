@@ -1,4 +1,4 @@
-import type { Platform, ContentType, SpeechStyle } from "@faceless/shared";
+import type { Platform, ContentType, SpeechStyle, BrandKit } from "@faceless/shared";
 export type { Platform, ContentType };
 
 export interface CameraDirection {
@@ -64,6 +64,7 @@ export interface PromptContext {
   aspectRatio: string;
   language: string;
   avatar?: AvatarContext;
+  brandKit?: BrandKit;
   sceneIndex?: number;
   totalScenes?: number;
 }

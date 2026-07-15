@@ -2,14 +2,14 @@ import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import { getProviders } from "../../lib/providers/factory.js";
 import { getImageSize } from "../../lib/providers/dashscope.js";
-import { buildPromptContext, assembleFinalPrompt } from "../../lib/prompts/prompt-builder.js";
+import { buildPromptContext, assembleFinalPrompt, renderBrandKitGuidance } from "../../lib/prompts/prompt-builder.js";
 import { getNegativePrompt } from "../../lib/prompts/negative-prompts.js";
 import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/avatar-injector.js";
 import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
-import type { Platform, ContentType } from "@faceless/shared";
+import type { Platform, ContentType, BrandKit } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
 import {
   renderChatTemplate,
@@ -19,6 +19,7 @@ import {
   renderPovOverlay,
 } from "../../lib/compositing/renderer.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
+import { applyWatermarkToBuffer } from "../../lib/compositing/watermark.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -59,6 +60,8 @@ const enhanceImagePromptStep = createStep({
     language: z.string(),
     avatarId: z.string().optional(),
     avatarContext: z.string().optional(),
+    brandKitGuidance: z.string().optional(),
+    brandKitJson: z.string().optional(),
     isFaceless: z.boolean(),
     promptMetadata: z.any(),
     templateVisualGuidance: z.string().optional(),
@@ -133,6 +136,9 @@ Output format: JSON with {
 
     const finalPrompt = assembleFinalPrompt(enhanced, context, true);
 
+    const brandKitGuidance = renderBrandKitGuidance(context.brandKit);
+    const brandKitJson = context.brandKit ? JSON.stringify(context.brandKit) : undefined;
+
     return {
       contentId: inputData.contentId,
       userId: inputData.userId,
@@ -143,6 +149,8 @@ Output format: JSON with {
       language: inputData.language,
       avatarId: inputData.avatarId,
       avatarContext: isFaceless ? renderNoAvatarGuidance() : renderAvatarForText(context.avatar!),
+      brandKitGuidance,
+      brandKitJson,
       isFaceless,
       promptMetadata: {
         enhanced,
@@ -173,6 +181,8 @@ const generateImageScriptStep = createStep({
     language: z.string(),
     avatarId: z.string().optional(),
     avatarContext: z.string().optional(),
+    brandKitGuidance: z.string().optional(),
+    brandKitJson: z.string().optional(),
     isFaceless: z.boolean(),
     promptMetadata: z.any(),
     templateSystemPrompt: z.string().optional(),
@@ -190,6 +200,7 @@ const generateImageScriptStep = createStep({
     promptMetadata: z.any(),
     script: z.string(),
     caption: z.string(),
+    brandKitJson: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
   }),
@@ -200,6 +211,8 @@ const generateImageScriptStep = createStep({
     const isFaceless = inputData.isFaceless;
     const avatarContext = inputData.avatarContext ?? "";
 
+    const brandSection = inputData.brandKitGuidance ? `\n\nBrand identity:\n${inputData.brandKitGuidance}\n\nIncorporate the brand identity naturally into the content.` : "";
+
     const baseSystemPrompt = `You are a professional social media caption writer for faceless content.
 Generate an engaging caption for a ${inputData.platform} image post.
 
@@ -209,7 +222,7 @@ ${strategy.visualStyleGuidance}
 ${isFaceless ? "FACELESS MODE: No human figures or faces. Focus on the visual theme." : `AVATAR MODE: Write in this character's voice:\n${avatarContext}`}
 
 Language: ${inputData.language}
-
+${brandSection}
 Output format: JSON with "hook", "body", "cta", "caption" (with hashtags).
 
 CRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include slide numbers or scene numbering in the visual description.`;
@@ -255,6 +268,7 @@ CRITICAL: Never include fake social media statistics, follower counts, like coun
       promptMetadata: inputData.promptMetadata,
       script,
       caption,
+      brandKitJson: inputData.brandKitJson,
       templateId: inputData.templateId,
       templateInputs: inputData.templateInputs,
     };
@@ -272,6 +286,7 @@ const generateImageStep = createStep({
     promptMetadata: z.any(),
     script: z.string(),
     caption: z.string(),
+    brandKitJson: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
   }),
@@ -281,6 +296,7 @@ const generateImageStep = createStep({
     imageUrls: z.array(z.string()),
     script: z.string(),
     caption: z.string(),
+    brandKitJson: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     aspectRatio: z.string(),
@@ -311,6 +327,7 @@ const generateImageStep = createStep({
         imageUrls: [],
         script: inputData.script,
         caption: inputData.caption,
+        brandKitJson: inputData.brandKitJson,
         templateId: inputData.templateId,
         templateInputs: inputData.templateInputs,
         aspectRatio: inputData.aspectRatio,
@@ -369,6 +386,7 @@ const generateImageStep = createStep({
       imageUrls,
       script: inputData.script,
       caption: inputData.caption,
+      brandKitJson: inputData.brandKitJson,
       templateId: inputData.templateId,
       templateInputs: inputData.templateInputs,
       aspectRatio: inputData.aspectRatio,
@@ -385,6 +403,7 @@ const compositeImageStep = createStep({
     imageUrls: z.array(z.string()),
     script: z.string(),
     caption: z.string(),
+    brandKitJson: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     aspectRatio: z.string(),
@@ -399,84 +418,100 @@ const compositeImageStep = createStep({
   execute: async ({ inputData }) => {
     const { templateId, templateInputs, imageUrls, aspectRatio } = inputData;
 
+    let resultUrls: string[] = imageUrls;
+
     if (!templateId || !templateInputs) {
-      return {
-        contentId: inputData.contentId,
-        userId: inputData.userId,
-        compositedImageUrls: imageUrls,
-        script: inputData.script,
-        caption: inputData.caption,
-      };
-    }
+      resultUrls = imageUrls;
+    } else {
+      const compositedUrls: string[] = [];
 
-    const compositedUrls: string[] = [];
-
-    switch (templateId) {
-      case "fake-chat": {
-        const buffer = await renderChatTemplate(templateInputs, aspectRatio);
-        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-        compositedUrls.push(url);
-        break;
-      }
-
-      case "fact-card": {
-        let bgBuffer: Buffer | undefined;
-        if (imageUrls.length > 0) {
-          bgBuffer = await downloadImageAsBuffer(imageUrls[0]);
-        }
-        const buffer = await renderFactCardTemplate(templateInputs, aspectRatio, bgBuffer);
-        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-        compositedUrls.push(url);
-        break;
-      }
-
-      case "quote-card": {
-        let bgBuffer: Buffer | undefined;
-        if (imageUrls.length > 0) {
-          bgBuffer = await downloadImageAsBuffer(imageUrls[0]);
-        }
-        const buffer = await renderQuoteCardTemplate(templateInputs, aspectRatio, bgBuffer);
-        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-        compositedUrls.push(url);
-        break;
-      }
-
-      case "split-screen": {
-        if (imageUrls.length < 2) {
-          throw new Error("Split screen template requires 2 generated images");
-        }
-        const leftBuffer = await downloadImageAsBuffer(imageUrls[0]);
-        const rightBuffer = await downloadImageAsBuffer(imageUrls[1]);
-        const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
-        const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-        compositedUrls.push(url);
-        break;
-      }
-
-      case "pov": {
-        for (const imageUrl of imageUrls) {
-          const bgBuffer = await downloadImageAsBuffer(imageUrl);
-          const buffer = await renderPovOverlay(templateInputs, aspectRatio, bgBuffer);
+      switch (templateId) {
+        case "fake-chat": {
+          const buffer = await renderChatTemplate(templateInputs, aspectRatio);
           const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedUrls.push(url);
+          break;
         }
-        break;
+
+        case "fact-card": {
+          let bgBuffer: Buffer | undefined;
+          if (imageUrls.length > 0) {
+            bgBuffer = await downloadImageAsBuffer(imageUrls[0]);
+          }
+          const buffer = await renderFactCardTemplate(templateInputs, aspectRatio, bgBuffer);
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+          compositedUrls.push(url);
+          break;
+        }
+
+        case "quote-card": {
+          let bgBuffer: Buffer | undefined;
+          if (imageUrls.length > 0) {
+            bgBuffer = await downloadImageAsBuffer(imageUrls[0]);
+          }
+          const buffer = await renderQuoteCardTemplate(templateInputs, aspectRatio, bgBuffer);
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+          compositedUrls.push(url);
+          break;
+        }
+
+        case "split-screen": {
+          if (imageUrls.length < 2) {
+            throw new Error("Split screen template requires 2 generated images");
+          }
+          const leftBuffer = await downloadImageAsBuffer(imageUrls[0]);
+          const rightBuffer = await downloadImageAsBuffer(imageUrls[1]);
+          const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
+          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+          compositedUrls.push(url);
+          break;
+        }
+
+        case "pov": {
+          for (const imageUrl of imageUrls) {
+            const bgBuffer = await downloadImageAsBuffer(imageUrl);
+            const buffer = await renderPovOverlay(templateInputs, aspectRatio, bgBuffer);
+            const url = await uploadFile(buffer, randomFilename("png"), "image/png");
+            compositedUrls.push(url);
+          }
+          break;
+        }
+
+        default:
+          resultUrls = imageUrls;
+          break;
       }
 
-      default:
-        return {
-          contentId: inputData.contentId,
-          userId: inputData.userId,
-          compositedImageUrls: imageUrls,
-          script: inputData.script,
-          caption: inputData.caption,
-        };
+      if (compositedUrls.length > 0) {
+        resultUrls = compositedUrls;
+      } else if (!resultUrls) {
+        resultUrls = imageUrls;
+      }
+    }
+
+    let brandKit: BrandKit | undefined;
+    try {
+      if (inputData.brandKitJson) {
+        brandKit = JSON.parse(inputData.brandKitJson) as BrandKit;
+      }
+    } catch {}
+
+    if (brandKit?.logoUrl && resultUrls.length > 0) {
+      const watermarkedUrls: string[] = [];
+      for (const url of resultUrls) {
+        const response = await fetch(url);
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const watermarked = await applyWatermarkToBuffer(buffer, brandKit.logoUrl);
+        const newUrl = await uploadFile(watermarked, randomFilename("png"), "image/png");
+        watermarkedUrls.push(newUrl);
+      }
+      resultUrls = watermarkedUrls;
     }
 
     return {
       contentId: inputData.contentId,
       userId: inputData.userId,
-      compositedImageUrls: compositedUrls,
+      compositedImageUrls: resultUrls,
       script: inputData.script,
       caption: inputData.caption,
     };

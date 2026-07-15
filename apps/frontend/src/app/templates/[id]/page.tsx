@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, Loader2, ChevronLeft, User } from "lucide-react";
+import { Sparkles, Loader2, User } from "lucide-react";
 import Link from "next/link";
 import { use } from "react";
 import { useState, useEffect } from "react";
@@ -144,189 +144,201 @@ export default function TemplateDetailPage({
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in space-y-6 overflow-safe-mobile">
-          <div>
-            <Link
-              href="/templates"
-              className="mb-3 inline-flex items-center gap-1 text-sm text-primary hover:underline"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back to Templates
-            </Link>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <Sparkles className="h-6 w-6 text-primary" />
-              {template.name}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {template.description}
-            </p>
-          </div>
-
-          <Card className="glass depth-2 border-border/50">
-            <CardContent className="p-5 space-y-4">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                  Project
-                </label>
-                <Select
-                  value={selectedProjectId}
-                  onValueChange={(v) => v && setSelectedProjectId(v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects?.map(
-                      (project: { id: string; name: string }) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
-                        </SelectItem>
-                      ),
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                  Avatar <span className="text-muted-foreground/50">(recommended for POV)</span>
-                </label>
-                <Select value={selectedAvatarId} onValueChange={(v) => v && setSelectedAvatarId(v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="No avatar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">No avatar</SelectItem>
-                    {avatars?.map((avatar: { id: string; name: string }) => (
-                      <SelectItem key={avatar.id} value={avatar.id}>
-                        <span className="flex items-center gap-2">
-                          <User className="h-3 w-3" />
-                          {avatar.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {template.supportedContentTypes.length > 1 && (
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                    Content Type
-                  </label>
-                  <Select
-                    value={selectedContentType}
-                    onValueChange={(v) => v && setSelectedContentType(v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {template.supportedContentTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {OUTPUT_TYPE_LABELS[type] ?? type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                    Platform
-                  </label>
-                  <Select
-                    value={selectedPlatform}
-                    onValueChange={(v) => {
-                      if (!v) return;
-                      setSelectedPlatform(v);
-                      const specs = PLATFORM_SPECS[v as keyof typeof PLATFORM_SPECS];
-                      setSelectedAspectRatio(specs?.aspectRatios[0] ?? "16:9");
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {template.supportedPlatforms.map((p) => (
-                        <SelectItem key={p} value={p}>
-                          {p.charAt(0).toUpperCase() + p.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                    Aspect Ratio
-                  </label>
-                  <div className="flex gap-1.5">
-                    {aspectRatios.map((ratio) => (
-                      <Button
-                        key={ratio}
-                        onClick={() => setSelectedAspectRatio(ratio)}
-                        variant={
-                          selectedAspectRatio === ratio ? "default" : "outline"
-                        }
-                        size="sm"
-                        className="flex-1 text-xs"
-                      >
-                        {ratio}
-                      </Button>
-                    ))}
+        <div className="animate-fade-in">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            {/* Left: Template info */}
+            <div className="lg:col-span-2 space-y-6 lg:sticky lg:top-0 lg:self-start">
+              <Card className="glass depth-2 border-border/50">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                      <Sparkles className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h1 className="text-xl font-bold text-foreground">
+                        {template.name}
+                      </h1>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {template.category}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                    Language
-                  </label>
-                  <Select
-                    value={selectedLanguage}
-                    onValueChange={(v) => v && setSelectedLanguage(v)}
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {template.description}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right: Form */}
+            <div className="lg:col-span-3">
+              <Card className="glass depth-2 border-border/50">
+                <CardContent className="p-5 space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                      Project
+                    </label>
+                    <Select
+                      value={selectedProjectId}
+                      onValueChange={(v) => v && setSelectedProjectId(v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects?.map(
+                          (project: { id: string; name: string }) => (
+                            <SelectItem key={project.id} value={project.id}>
+                              {project.name}
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                      Avatar <span className="text-muted-foreground/50">(recommended for POV)</span>
+                    </label>
+                    <Select value={selectedAvatarId} onValueChange={(v) => v && setSelectedAvatarId(v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="No avatar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">No avatar</SelectItem>
+                        {avatars?.map((avatar: { id: string; name: string }) => (
+                          <SelectItem key={avatar.id} value={avatar.id}>
+                            <span className="flex items-center gap-2">
+                              <User className="h-3 w-3" />
+                              {avatar.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {template.supportedContentTypes.length > 1 && (
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Content Type
+                      </label>
+                      <Select
+                        value={selectedContentType}
+                        onValueChange={(v) => v && setSelectedContentType(v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {template.supportedContentTypes.map((type: string) => (
+                            <SelectItem key={type} value={type}>
+                              {OUTPUT_TYPE_LABELS[type] ?? type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Platform
+                      </label>
+                      <Select
+                        value={selectedPlatform}
+                        onValueChange={(v) => {
+                          if (!v) return;
+                          setSelectedPlatform(v);
+                          const specs = PLATFORM_SPECS[v as keyof typeof PLATFORM_SPECS];
+                          setSelectedAspectRatio(specs?.aspectRatios[0] ?? "16:9");
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {template.supportedPlatforms.map((p: string) => (
+                            <SelectItem key={p} value={p}>
+                              {p.charAt(0).toUpperCase() + p.slice(1)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Aspect Ratio
+                      </label>
+                      <div className="flex gap-1.5">
+                        {aspectRatios.map((ratio: string) => (
+                          <Button
+                            key={ratio}
+                            onClick={() => setSelectedAspectRatio(ratio)}
+                            variant={
+                              selectedAspectRatio === ratio ? "default" : "outline"
+                            }
+                            size="sm"
+                            className="flex-1 text-xs"
+                          >
+                            {ratio}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                        Language
+                      </label>
+                      <Select
+                        value={selectedLanguage}
+                        onValueChange={(v) => v && setSelectedLanguage(v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LANGUAGES.map((lang: { code: string; label: string }) => (
+                            <SelectItem key={lang.code} value={lang.code}>
+                              {lang.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <TemplateForm
+                    template={template}
+                    inputs={templateInputs}
+                    onChange={setTemplateInputs}
+                  />
+
+                  <Button
+                    onClick={handleCreate}
+                    disabled={
+                      !selectedProjectId || createContent.isPending
+                    }
+                    className="w-full"
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LANGUAGES.map((lang) => (
-                        <SelectItem key={lang.code} value={lang.code}>
-                          {lang.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <TemplateForm
-                template={template}
-                inputs={templateInputs}
-                onChange={setTemplateInputs}
-              />
-
-              <Button
-                onClick={handleCreate}
-                disabled={
-                  !selectedProjectId || createContent.isPending
-                }
-                className="w-full"
-              >
-                {createContent.isPending ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    Generating...
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    Generate Content
-                  </span>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
+                    {createContent.isPending ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        Generating...
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center gap-2">
+                        <Sparkles className="h-4 w-4" />
+                        Generate Content
+                      </span>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </DashboardLayout>
     </AuthGuard>

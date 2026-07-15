@@ -194,7 +194,9 @@ export function ContentCreator({ projectId }: { projectId: string }) {
                 ))}
               </div>
             </div>
-            <div>
+          </div>
+
+          <div>
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                 Language
               </label>
@@ -210,7 +212,6 @@ export function ContentCreator({ projectId }: { projectId: string }) {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
           </div>
 
           {/* Advanced toggle */}

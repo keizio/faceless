@@ -2,65 +2,82 @@
 
 import { AuthGuard } from "@/components/AuthGuard";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { CardSkeleton } from "@/components/Skeleton";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { ProjectGridSkeleton } from "@/components/GridSkeleton";
 import { useAvatars } from "@/hooks/useAvatars";
 import { SPEECH_STYLE_LABELS, getAgeRangeLabel } from "@faceless/shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import { User, Plus, Sparkles, ChevronRight } from "lucide-react";
+import { useState, useMemo } from "react";
+import { User, Plus, Sparkles, ChevronRight, Search } from "lucide-react";
 
 export default function AvatarsPage() {
   const { data: avatars, isLoading } = useAvatars();
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!avatars) return [];
+    if (!search.trim()) return avatars;
+    const q = search.toLowerCase();
+    return avatars.filter(
+      (a: { name: string; speechStyle?: string | null }) =>
+        a.name.toLowerCase().includes(q) ||
+        (a.speechStyle && a.speechStyle.toLowerCase().includes(q)),
+    );
+  }, [avatars, search]);
 
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in space-y-8 overflow-safe-mobile">
-          {/* Header */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-foreground">Avatars</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Personas and character profiles for your content
-              </p>
-            </div>
-            <Link href="/avatars/new">
-              <Button className="shrink-0">
-                <Plus className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Create Avatar</span>
-                <span className="sm:hidden">Create</span>
-              </Button>
-            </Link>
+        <div className="animate-fade-in space-y-6">
+          <PageHeader
+            title="Avatars"
+            subtitle="Personas and character profiles for your content"
+            icon={<User className="h-5 w-5 text-primary" />}
+            actions={
+              <Link href="/avatars/new">
+                <Button className="shrink-0">
+                  <Plus className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Create Avatar</span>
+                  <span className="sm:hidden">Create</span>
+                </Button>
+              </Link>
+            }
+          />
+
+          {/* Search */}
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search avatars..."
+              className="pl-9 h-9 text-sm"
+            />
           </div>
 
           {/* Avatar grid */}
           {isLoading ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <CardSkeleton key={i} />
-              ))}
-            </div>
-          ) : avatars?.length === 0 ? (
-            <Card className="flex flex-col items-center justify-center py-16 text-center border-border/50">
-              <CardContent>
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mx-auto">
-                  <User className="h-8 w-8 text-primary" />
-                </div>
-                <h3 className="mb-1 text-lg font-semibold text-foreground">
-                  No avatars yet
-                </h3>
-                <p className="mb-6 text-sm text-muted-foreground">
-                  Create an avatar to use as a consistent character in your generated content
-                </p>
-                <Link href="/avatars/new">
-                  <Button>Create Your First Avatar</Button>
-                </Link>
-              </CardContent>
-            </Card>
+            <ProjectGridSkeleton count={3} />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon={<User className="h-8 w-8 text-primary" />}
+              title={search ? "No avatars match your search" : "No avatars yet"}
+              description={search ? "Try a different search term" : "Create an avatar to use as a consistent character in your generated content"}
+              action={
+                !search ? (
+                  <Link href="/avatars/new">
+                    <Button>Create Your First Avatar</Button>
+                  </Link>
+                ) : undefined
+              }
+            />
           ) : (
             <div className="isometric-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {avatars?.map((avatar: {
+              {filtered.map((avatar: {
                 id: string;
                 name: string;
                 age: number | null;

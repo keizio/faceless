@@ -4,12 +4,13 @@ import type {
   Platform,
   ContentType,
 } from "./types.js";
+import type { BrandKit } from "@faceless/shared";
 import { buildAvatarContext, renderAvatarForVisual, renderNoAvatarGuidance } from "./avatar-injector.js";
 import { getNegativePrompt } from "./negative-prompts.js";
 import { PLATFORM_STRATEGIES } from "./platform-strategies.js";
 import { renderCameraDirection, cameraDirectionForScene } from "./camera-dsl.js";
 import { db } from "../../db/index.js";
-import { contents } from "../../db/schema.js";
+import { contents, projects } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 
 export async function buildPromptContext(
@@ -23,7 +24,7 @@ export async function buildPromptContext(
   totalScenes?: number,
 ): Promise<PromptContext> {
   const [content] = await db
-    .select({ avatarId: contents.avatarId })
+    .select({ avatarId: contents.avatarId, projectId: contents.projectId })
     .from(contents)
     .where(eq(contents.id, contentId))
     .limit(1);
@@ -42,6 +43,17 @@ export async function buildPromptContext(
     context.avatar = await buildAvatarContext(content.avatarId);
   }
 
+  if (content?.projectId) {
+    const [project] = await db
+      .select({ brandKit: projects.brandKit })
+      .from(projects)
+      .where(eq(projects.id, content.projectId))
+      .limit(1);
+    if (project?.brandKit && Object.keys(project.brandKit).length > 0) {
+      context.brandKit = project.brandKit;
+    }
+  }
+
   return context;
 }
 
@@ -51,6 +63,38 @@ const ASPECT_LABELS: Record<string, string> = {
   "1:1": "1:1 (square)",
   "4:5": "4:5 (portrait)",
 };
+
+export function renderBrandKitGuidance(brandKit?: BrandKit): string {
+  if (!brandKit) return "";
+
+  const sections: string[] = [];
+
+  if (brandKit.brandName) {
+    sections.push(`Brand: ${brandKit.brandName}`);
+  }
+
+  if (brandKit.brandVoice) {
+    sections.push(`Brand voice: ${brandKit.brandVoice}`);
+  }
+
+  if (brandKit.defaultCta) {
+    sections.push(`Call to action: ${brandKit.defaultCta}`);
+  }
+
+  if (brandKit.defaultHashtags && brandKit.defaultHashtags.length > 0) {
+    sections.push(`Default hashtags: ${brandKit.defaultHashtags.join(" ")}`);
+  }
+
+  if (brandKit.colors) {
+    const { primary, secondary, accent, text, background } = brandKit.colors;
+    const colorParts = [`Brand colors: primary=${primary}, secondary=${secondary}, accent=${accent}`];
+    if (text) colorParts.push(`text=${text}`);
+    if (background) colorParts.push(`background=${background}`);
+    sections.push(colorParts.join(", "));
+  }
+
+  return sections.join("\n");
+}
 
 export function assembleFinalPrompt(
   enhanced: EnhancedPrompt,
