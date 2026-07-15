@@ -4,7 +4,14 @@ import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import type { BrandKit } from "@faceless/shared";
 
 export class ProjectService {
-  async listProjects(userId: string) {
+  async listProjects(userId: string, limit = 50, offset = 0) {
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(projects)
+      .where(eq(projects.userId, userId));
+
+    const total = totalResult?.count ?? 0;
+
     const result = await db
       .select({
         id: projects.id,
@@ -19,7 +26,9 @@ export class ProjectService {
       .leftJoin(contents, eq(contents.projectId, projects.id))
       .where(eq(projects.userId, userId))
       .groupBy(projects.id)
-      .orderBy(projects.updatedAt);
+      .orderBy(desc(projects.updatedAt))
+      .limit(limit)
+      .offset(offset);
 
     const projectIds = result.map((p) => p.id);
     const thumbnailsByProject = new Map<string, string[]>();
@@ -58,10 +67,13 @@ export class ProjectService {
       }
     }
 
-    return result.map((p) => ({
-      ...p,
-      contentThumbnails: thumbnailsByProject.get(p.id) ?? [],
-    }));
+    return {
+      projects: result.map((p) => ({
+        ...p,
+        contentThumbnails: thumbnailsByProject.get(p.id) ?? [],
+      })),
+      total,
+    };
   }
 
   async createProject(
@@ -111,6 +123,17 @@ export class ProjectService {
     }));
 
     return { ...project, contents: contentsWithMedia };
+  }
+
+  async updateProject(userId: string, id: string, data: { name?: string; description?: string }) {
+    const [project] = await db
+      .update(projects)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(projects.id, id), eq(projects.userId, userId)))
+      .returning();
+
+    if (!project) throw new Error("Project not found");
+    return project;
   }
 
   async deleteProject(userId: string, id: string) {

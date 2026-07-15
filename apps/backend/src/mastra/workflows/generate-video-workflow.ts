@@ -25,6 +25,7 @@ import {
 } from "../../lib/compositing/renderer.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
 import { applyWatermarkToBuffer } from "../../lib/compositing/watermark.js";
+import { composeVideoWithAudio } from "../../lib/compositing/video-composer.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -723,17 +724,78 @@ const generateVoiceoverStep = createStep({
   },
 });
 
-const saveVideoVersionStep = createStep({
-  id: "save-video-version",
-  description: "Save generated video as a content version",
+const composeVideoAudioStep = createStep({
+  id: "compose-video-audio",
+  description: "Merge video clips and overlay voiceover audio",
   inputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
     videoUrls: z.array(z.string()),
     script: z.string(),
     caption: z.string(),
+    narrationText: z.string(),
     audioUrl: z.string().optional(),
     audioDurationMs: z.number().optional(),
+  }),
+  outputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    videoUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    audioUrl: z.string().optional(),
+  }),
+  execute: async ({ inputData }) => {
+    if (inputData.videoUrls.length === 0) {
+      return {
+        contentId: inputData.contentId,
+        userId: inputData.userId,
+        videoUrls: inputData.videoUrls,
+        script: inputData.script,
+        caption: inputData.caption,
+        audioUrl: inputData.audioUrl,
+      };
+    }
+
+    const compositedUrl = await composeVideoWithAudio(
+      inputData.videoUrls,
+      inputData.audioUrl,
+    );
+
+    await insertMediaAsset({
+      userId: inputData.userId,
+      contentId: inputData.contentId,
+      type: "video",
+      url: compositedUrl,
+      provider: "composite",
+      metadata: {
+        source: "video-composer",
+        originalVideoCount: inputData.videoUrls.length,
+        hasAudio: !!inputData.audioUrl,
+      },
+    });
+
+    return {
+      contentId: inputData.contentId,
+      userId: inputData.userId,
+      videoUrls: [compositedUrl],
+      script: inputData.script,
+      caption: inputData.caption,
+      audioUrl: inputData.audioUrl,
+    };
+  },
+});
+
+const saveVideoVersionStep = createStep({
+  id: "save-video-version",
+  description: "Save generated video as a content version",
+inputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    videoUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    audioUrl: z.string().optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -766,7 +828,6 @@ const saveVideoVersionStep = createStep({
           caption: inputData.caption,
           script: inputData.script,
           audioUrl: inputData.audioUrl,
-          audioDurationMs: inputData.audioDurationMs,
         },
       })
       .returning();
@@ -805,6 +866,7 @@ export const generateVideoWorkflow = createWorkflow({
   .then(compositeVideoSceneStep)
   .then(generateVideoClipsStep)
   .then(generateVoiceoverStep)
+  .then(composeVideoAudioStep)
   .then(saveVideoVersionStep);
 
 generateVideoWorkflow.commit();

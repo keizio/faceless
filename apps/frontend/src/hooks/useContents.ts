@@ -3,12 +3,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
-export function useAllContents() {
+export function useAllContents(limit?: number, offset?: number) {
   return useQuery({
-    queryKey: ["contents"],
+    queryKey: ["contents", { limit, offset }],
     queryFn: async () => {
-      const { data } = await api.get("/api/contents");
-      return data.contents;
+      const params = new URLSearchParams();
+      if (limit) params.set("limit", String(limit));
+      if (offset) params.set("offset", String(offset));
+      const { data } = await api.get(`/api/contents?${params.toString()}`);
+      return { contents: data.contents, total: data.total };
     },
   });
 }

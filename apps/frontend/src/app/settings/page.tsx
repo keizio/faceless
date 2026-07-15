@@ -14,14 +14,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
-import { Save, Globe, Bell, Key, Moon, User } from "lucide-react";
+import { Save, Globe, Bell, Key, Moon, User, Mail, CreditCard } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function SettingsPage() {
   const { data: user, isLoading } = useUserProfile();
   const updateLanguage = useUpdateLanguage();
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
+  const [notifyContentGenerated, setNotifyContentGenerated] = useState(true);
+  const [notifyContentFailed, setNotifyContentFailed] = useState(true);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
     if (user?.language && selectedLanguage === null) {
@@ -35,6 +40,12 @@ export default function SettingsPage() {
     if (selectedLanguage && selectedLanguage !== user?.language) {
       updateLanguage.mutate(selectedLanguage);
     }
+  };
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.className = next === "dark" ? "dark" : "";
   };
 
   return (
@@ -95,47 +106,107 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Account (placeholder) */}
-          <Card className="border-border/50 opacity-60">
+          {/* Account */}
+          <Card className="border-border/50">
             <CardContent className="p-5">
               <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
                 <User className="h-4 w-4 text-primary" />
                 Account
               </h3>
-              <p className="text-sm text-muted-foreground">Account settings coming soon — profile management, email preferences, and account deletion.</p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Email</p>
+                    <p className="text-xs text-muted-foreground">{user?.email ?? "—"}</p>
+                  </div>
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex items-center justify-between py-2 border-t border-border/50">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Plan</p>
+                    <p className="text-xs text-muted-foreground capitalize">{user?.plan ?? "Free"}</p>
+                  </div>
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex items-center justify-between py-2 border-t border-border/50">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Name</p>
+                    <p className="text-xs text-muted-foreground">{user?.name ?? "Not set"}</p>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Notifications (placeholder) */}
-          <Card className="border-border/50 opacity-60">
+          {/* Notifications */}
+          <Card className="border-border/50">
             <CardContent className="p-5">
               <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
                 <Bell className="h-4 w-4 text-primary" />
                 Notifications
               </h3>
-              <p className="text-sm text-muted-foreground">Notification preferences coming soon — choose which events trigger alerts.</p>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="notify-generated" className="text-sm font-medium">Content Generated</Label>
+                    <p className="text-xs text-muted-foreground">Notify when content generation completes</p>
+                  </div>
+                  <Switch
+                    id="notify-generated"
+                    checked={notifyContentGenerated}
+                    onCheckedChange={setNotifyContentGenerated}
+                  />
+                </div>
+                <div className="flex items-center justify-between border-t border-border/50 pt-4">
+                  <div>
+                    <Label htmlFor="notify-failed" className="text-sm font-medium">Content Failed</Label>
+                    <p className="text-xs text-muted-foreground">Notify when content generation fails</p>
+                  </div>
+                  <Switch
+                    id="notify-failed"
+                    checked={notifyContentFailed}
+                    onCheckedChange={setNotifyContentFailed}
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
 
-          {/* API Keys (placeholder) */}
-          <Card className="border-border/50 opacity-60">
+          {/* API Keys */}
+          <Card className="border-border/50">
             <CardContent className="p-5">
               <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
                 <Key className="h-4 w-4 text-primary" />
                 API Keys
               </h3>
-              <p className="text-sm text-muted-foreground">API key management coming soon — generate and manage API keys for programmatic access.</p>
+              <p className="text-sm text-muted-foreground mb-4">
+                API key management is in development. You will be able to generate and manage API keys for programmatic access to the Faceless API.
+              </p>
+              <Button variant="outline" size="sm" disabled>
+                <Key className="mr-1.5 h-3.5 w-3.5" />
+                Generate API Key
+              </Button>
             </CardContent>
           </Card>
 
-          {/* Appearance (placeholder) */}
-          <Card className="border-border/50 opacity-60">
+          {/* Appearance */}
+          <Card className="border-border/50">
             <CardContent className="p-5">
               <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
                 <Moon className="h-4 w-4 text-primary" />
                 Appearance
               </h3>
-              <p className="text-sm text-muted-foreground">Theme and display settings coming soon — toggle between dark and light mode.</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="theme-toggle" className="text-sm font-medium">Dark Mode</Label>
+                  <p className="text-xs text-muted-foreground">Toggle between dark and light theme</p>
+                </div>
+                <Switch
+                  id="theme-toggle"
+                  checked={theme === "dark"}
+                  onCheckedChange={toggleTheme}
+                />
+              </div>
             </CardContent>
           </Card>
         </div>

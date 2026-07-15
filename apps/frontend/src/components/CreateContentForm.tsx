@@ -69,7 +69,8 @@ interface CreateContentFormProps {
 
 export function CreateContentForm({ onSuccess, initialValues }: CreateContentFormProps) {
   const router = useRouter();
-  const { data: projects } = useProjects();
+  const { data: projectsData } = useProjects();
+  const projects = projectsData?.projects;
   const { data: avatars } = useAvatars();
   const { data: userProfile } = useUserProfile();
   

@@ -2,6 +2,7 @@ import { db } from "../db";
 import { avatars, generationJobs } from "../db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { enqueueAvatarGeneration } from "../queues/avatar-generation.js";
+import { UsageService } from "./usage.js";
 
 export class AvatarService {
   async listAvatars(userId: string) {
@@ -104,6 +105,12 @@ export class AvatarService {
   }
 
   async generateCharacterSheet(userId: string, avatarId: string, customPrompt?: string) {
+    const usageService = new UsageService();
+    const limit = await usageService.checkGenerationLimit(userId);
+    if (!limit.allowed) {
+      throw new Error(`Daily generation limit reached. You have used ${limit.limit} out of ${limit.limit} generations. Upgrade to pro for more.`);
+    }
+
     const avatar = await this.getAvatar(userId, avatarId);
 
     const resolvedCustomPrompt = customPrompt || (avatar.metadata as Record<string, unknown> | null)?.customPrompt as string | undefined;

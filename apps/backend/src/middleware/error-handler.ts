@@ -1,12 +1,17 @@
 import { ErrorHandler } from "hono";
+import { HTTPException } from "hono/http-exception";
 
 export const errorHandler: ErrorHandler = (err, c) => {
   console.error("Unhandled error:", err);
 
-  if ("status" in err && typeof err.status === "number") {
+  if (err instanceof HTTPException) {
+    return c.json({ error: err.message }, err.status);
+  }
+
+  if (err instanceof Error && "status" in err && typeof (err as any).status === "number") {
     return c.json(
       { error: err.message || "An error occurred" },
-      err.status as any,
+      (err as any).status as any,
     );
   }
 

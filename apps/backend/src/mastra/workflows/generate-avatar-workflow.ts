@@ -38,22 +38,23 @@ const generateCharacterDescriptionStep = createStep({
 
     const ageRange = getAgeRangeLabel(avatar.age ?? null);
 
-    const systemPrompt = `You are a character designer. Create a detailed character sheet for a realistic human avatar.
+    const systemPrompt = `You are a character designer. Create a detailed character description optimized for a multi-panel character reference sheet.
 
-Given the avatar's name, age, gender, and speech style, generate a comprehensive character description suitable for consistent AI image generation.
+Given the avatar's name, age, gender, and speech style, generate a comprehensive character description suitable for consistent AI image generation across multiple views and expressions.
 
 The character sheet should describe:
 1. Facial features (face shape, eyes, nose, mouth, skin tone, hair style and color, distinctive facial details)
 2. Physical appearance (clothing style, body type, posture, distinguishing features)
-3. Typical expressions and demeanor matching their speech style
-4. Typical environments and settings
-5. Color palette and aesthetic
-6. Camera angles and framing that suit this character
-7. Visual mood and atmosphere
+3. Body proportions from all angles (front, side, back, 3/4 view)
+4. Clothing details (fit, color, texture, how fabric drapes)
+5. 6 facial expressions: neutral, happy, sad, angry, surprised, thoughtful
+6. Distinguishing features visible from side and back views
+7. Color palette and aesthetic
+8. Typical environments and settings
 
 IMPORTANT: This is a REALISTIC HUMAN character. Describe their face and expressions in detail. Focus on making them look like an authentic, real person with unique facial characteristics.
 
-Output format: A single paragraph (200-300 words) that can be injected into image generation prompts to maintain character consistency.`;
+Output format: A single paragraph (200-300 words) that can be injected into image generation prompts to maintain character consistency across multiple views and expressions.`;
 
     let userPrompt = `Create a character sheet for: ${avatar.name}, ${ageRange || "unknown"} years old, ${avatar.gender ?? "unspecified"}, speech style: ${avatar.speechStyle ?? "neutral"}.`;
     if (inputData.customPrompt) {
@@ -95,12 +96,16 @@ const generateCharacterSheetStep = createStep({
   }),
   outputSchema: z.object({
     avatarId: z.string(),
+    userId: z.string(),
     characterSheetUrl: z.string(),
+    description: z.string(),
+    name: z.string(),
+    customPrompt: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
     const imageProvider = getProviders().image;
 
-    let imagePrompt = `A realistic character portrait of ${inputData.name}: ${inputData.description}. Photorealistic style, visible face with natural expressions, clean background, professional portrait photography.`;
+    let imagePrompt = `A character reference sheet showing ${inputData.name} in T-pose from front view (center, large), side view (right), back view (left), and 3/4 view. Below: 6 facial expression portraits in a 2x3 grid — neutral, happy, sad, angry, surprised, thoughtful. Character design: ${inputData.description}. Clean white background, consistent character design across all views, professional character sheet layout, grid lines separating panels, uniform lighting on all views.`;
     if (inputData.customPrompt) {
       imagePrompt += `\n\nAdditional instructions: ${inputData.customPrompt}`;
     }
@@ -118,7 +123,60 @@ const generateCharacterSheetStep = createStep({
 
     return {
       avatarId: inputData.avatarId,
+      userId: inputData.userId,
       characterSheetUrl,
+      description: inputData.description,
+      name: inputData.name,
+      customPrompt: inputData.customPrompt,
+    };
+  },
+});
+
+const generatePortraitStep = createStep({
+  id: "generate-portrait",
+  description: "Generate a clean portrait headshot and update the avatar",
+  inputSchema: z.object({
+    avatarId: z.string(),
+    userId: z.string(),
+    characterSheetUrl: z.string(),
+    description: z.string(),
+    name: z.string(),
+    customPrompt: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    avatarId: z.string(),
+    characterSheetUrl: z.string(),
+    portraitUrl: z.string(),
+  }),
+  execute: async ({ inputData }) => {
+    const imageProvider = getProviders().image;
+
+    let imagePrompt = `A professional headshot portrait of ${inputData.name}: ${inputData.description}. Soft studio lighting, clean background, warm smile, professional photography, 8K quality, soft natural makeup, business casual attire.`;
+    if (inputData.customPrompt) {
+      imagePrompt += `\n\nAdditional instructions: ${inputData.customPrompt}`;
+    }
+
+    const PORTRAIT_SIZE = "1080*1080";
+    const portraitUrl = await imageProvider.generate(imagePrompt, PORTRAIT_SIZE);
+
+    const [avatar] = await db
+      .select({ characterSheetUrl: avatars.characterSheetUrl })
+      .from(avatars)
+      .where(eq(avatars.id, inputData.avatarId))
+      .limit(1);
+
+    await db
+      .update(avatars)
+      .set({
+        portraitUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(avatars.id, inputData.avatarId));
+
+    return {
+      avatarId: inputData.avatarId,
+      characterSheetUrl: avatar?.characterSheetUrl ?? "",
+      portraitUrl,
     };
   },
 });
@@ -129,9 +187,11 @@ export const generateAvatarWorkflow = createWorkflow({
   outputSchema: z.object({
     avatarId: z.string(),
     characterSheetUrl: z.string(),
+    portraitUrl: z.string(),
   }),
 })
   .then(generateCharacterDescriptionStep)
-  .then(generateCharacterSheetStep);
+  .then(generateCharacterSheetStep)
+  .then(generatePortraitStep);
 
 generateAvatarWorkflow.commit();

@@ -11,6 +11,8 @@ import { settingsRoutes } from "./routes/settings";
 import { templateRoutes } from "./routes/templates";
 import { ideasRoutes } from "./routes/ideas";
 import { uploadRoutes } from "./routes/upload";
+import { statsRoutes } from "./routes/stats";
+import { rateLimiter } from "./middleware/rate-limiter";
 import { errorHandler } from "./middleware/error-handler";
 
 type Bindings = {};
@@ -25,7 +27,11 @@ export type AppEnv = { Bindings: Bindings; Variables: Variables };
 const app = new Hono<AppEnv>();
 
 app.use("*", logger());
-app.use("*", cors());
+app.use("/api/*", rateLimiter);
+app.use("*", cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  credentials: true,
+}));
 
 app.route("/api/auth", authRoutes);
 app.route("/api/projects", projectRoutes);
@@ -37,7 +43,7 @@ app.route("/api/settings", settingsRoutes);
 app.route("/api/templates", templateRoutes);
 app.route("/api/ideas", ideasRoutes);
 app.route("/api/upload", uploadRoutes);
-app.route("/api/upload", uploadRoutes);
+app.route("/api/stats", statsRoutes);
 
 app.onError(errorHandler);
 

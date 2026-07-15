@@ -73,7 +73,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { data: projects } = useProjects();
+  const { data: projectsData } = useProjects();
+  const projects = projectsData?.projects;
   const { sidebarOpen, sidebarCollapsed, toggleSidebar, setSidebarCollapsed } = useUIStore();
   const { open: searchOpen, setOpen: setSearchOpen } = useSearchDialog();
   const [searchQuery, setSearchQuery] = useState("");

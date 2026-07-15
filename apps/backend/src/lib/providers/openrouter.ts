@@ -1,5 +1,4 @@
-import type { TextProvider, GenerateTextOptions, ImageProvider, VideoProvider } from "./types.js";
-import { DashScopeVideoProvider } from "./dashscope.js";
+import type { TextProvider, GenerateTextOptions, ImageProvider } from "./types.js";
 import { downloadAndStoreImageUrl } from "../storage.js";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -116,22 +115,7 @@ export class OpenRouterImageProvider implements ImageProvider {
   }
 }
 
-export class OpenRouterVideoProvider implements VideoProvider {
-  private dashScopeVideoProvider = new DashScopeVideoProvider();
-
-  async generate(
-    sceneImages: { url: string; description: string }[],
-    storyboard: string,
-    avatarReferenceImage?: string,
-    onProgress?: (completed: number, total: number) => void,
-    options?: { avatarReferenceImage?: string; negativePrompt?: string },
-  ): Promise<string[]> {
-    return this.dashScopeVideoProvider.generate(
-      sceneImages,
-      storyboard,
-      avatarReferenceImage,
-      onProgress,
-      options,
-    );
-  }
-}
+// OpenRouter does not currently offer image-to-video generation.
+// Video generation falls back to DashScope. This class is kept for
+// future OpenRouter video API support.
+export { DashScopeVideoProvider as OpenRouterVideoProvider } from "./dashscope.js";

@@ -92,6 +92,7 @@ export const avatars = pgTable(
     speechStyle: speechStyleEnum("speech_style"),
     referenceImageUrl: text("reference_image_url"),
     characterSheetUrl: text("character_sheet_url"),
+    portraitUrl: text("portrait_url"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

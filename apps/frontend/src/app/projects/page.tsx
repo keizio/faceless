@@ -39,7 +39,8 @@ import {
 const SORT_OPTIONS = ["newest", "oldest", "most-content"] as const;
 
 export default function ProjectsPage() {
-  const { data: projects, isLoading } = useProjects();
+  const { data: projectsData, isLoading } = useProjects();
+  const projects = projectsData?.projects;
   const createProject = useCreateProject();
   const [showNewProject, setShowNewProject] = useState(false);
   const [name, setName] = useState("");

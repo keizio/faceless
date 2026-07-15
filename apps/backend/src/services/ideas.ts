@@ -1,6 +1,6 @@
 import { db } from "../db/index";
-import { ideas } from "../db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { ideas, users } from "../db/schema";
+import { eq, and } from "drizzle-orm";
 import { cacheGet, cacheSet } from "../lib/cache";
 import { mastra } from "../mastra/index";
 import type { Idea } from "@faceless/shared";
@@ -25,7 +25,7 @@ export async function getIdeas(language: string, date?: string): Promise<Idea[]>
     .where(and(eq(ideas.language, language), eq(ideas.date, targetDate)))
     .orderBy(ideas.createdAt);
 
-  const result = rows.map((row) => ({
+  const result: Idea[] = rows.map((row) => ({
     id: row.id,
     language: row.language,
     date: row.date,
@@ -143,12 +143,12 @@ export async function generateAllIdeas(): Promise<{ languages: string[]; count: 
     .groupBy(ideas.language);
 
   const distinctLanguages = rows.map((r) => r.language);
-  const userLanguages = await db.execute<{ language: string }>(
-    sql`SELECT DISTINCT language FROM users`,
-  );
+  const userLanguages = await db
+    .select({ language: users.language })
+    .from(users);
   const languages = [
     ...new Set([
-      ...(userLanguages.rows?.map((r) => r.language) ?? []),
+      ...userLanguages.map((r) => r.language),
       ...distinctLanguages,
       "en",
     ]),

@@ -9,7 +9,6 @@ import {
 import {
   OpenRouterTextProvider,
   OpenRouterImageProvider,
-  OpenRouterVideoProvider,
 } from "./openrouter.js";
 
 type ProviderName = "dashscope" | "openrouter";
@@ -42,15 +41,8 @@ function resolveImage(name: ProviderName): ImageProvider {
   }
 }
 
-function resolveVideo(name: ProviderName): VideoProvider {
-  switch (name) {
-    case "dashscope":
-      return new DashScopeVideoProvider();
-    case "openrouter":
-      return new OpenRouterVideoProvider();
-    default:
-      throw new Error(`Unknown video provider: ${name}`);
-  }
+function resolveVideo(_name: ProviderName): VideoProvider {
+  return new DashScopeVideoProvider();
 }
 
 function resolveAudio(_name: ProviderName): AudioProvider {

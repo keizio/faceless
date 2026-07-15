@@ -85,6 +85,7 @@ export default function AvatarsPage() {
                 speechStyle: string | null;
                 referenceImageUrl: string | null;
                 characterSheetUrl: string | null;
+                portraitUrl: string | null;
                 createdAt: string;
               }) => (
                 <Link
@@ -96,9 +97,9 @@ export default function AvatarsPage() {
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between">
                         <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-[hsl(var(--accent-secondary))]/20">
-                          {avatar.referenceImageUrl ? (
+                          {avatar.portraitUrl || avatar.referenceImageUrl ? (
                             <img
-                              src={avatar.referenceImageUrl}
+                              src={avatar.portraitUrl ?? avatar.referenceImageUrl ?? ""}
                               alt={avatar.name}
                               className="h-12 w-12 rounded-lg object-cover"
                             />

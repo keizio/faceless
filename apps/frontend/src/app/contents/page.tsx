@@ -23,7 +23,8 @@ const STATUS_OPTIONS = ["all", "completed", "failed", "generating", "queued"] as
 const SORT_OPTIONS = ["newest", "oldest"] as const;
 
 export default function ContentsPage() {
-  const { data: contents, isLoading } = useAllContents();
+  const { data: contentsData, isLoading } = useAllContents();
+  const contents = contentsData?.contents;
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");

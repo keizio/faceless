@@ -49,6 +49,7 @@ export interface Avatar {
   speechStyle: SpeechStyle | null;
   referenceImageUrl: string | null;
   characterSheetUrl: string | null;
+  portraitUrl: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;

@@ -158,9 +158,9 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                     <CardContent className="p-5">
                       <div className="flex flex-col sm:flex-row items-start gap-6">
                         <div className="flex h-16 w-16 sm:h-24 sm:w-24 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-[hsl(var(--accent-secondary))]/20 float-3d">
-                          {avatar.referenceImageUrl ? (
+                          {avatar.portraitUrl || avatar.referenceImageUrl ? (
                             <img
-                              src={avatar.referenceImageUrl}
+                              src={avatar.portraitUrl ?? avatar.referenceImageUrl ?? ""}
                               alt={avatar.name}
                               className="h-16 w-16 sm:h-24 sm:w-24 rounded-xl object-cover"
                             />

@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import { Toaster } from "sonner";
 import "@/styles/globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: { staleTime: 30_000, retry: 1 },
+          mutations: {
+            onError: (error) => {
+              const message = error instanceof Error ? error.message : "An unexpected error occurred";
+              import("sonner").then(({ toast }) => toast.error(message));
+            },
+          },
         },
       }),
   );
@@ -35,7 +42,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] antialiased">
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        <QueryClientProvider client={queryClient}>
+          {children}
+          <Toaster position="top-right" richColors closeButton />
+        </QueryClientProvider>
       </body>
     </html>
   );

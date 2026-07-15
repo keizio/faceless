@@ -42,6 +42,7 @@ import {
   ImageIcon,
   ArrowLeft,
   ArrowRight,
+  Download,
 } from "lucide-react";
 
 const TYPE_ICONS: Record<string, typeof Image> = {
@@ -142,22 +143,31 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                         {images.map((img: { id: string; url: string }, i: number) => {
                           const aspectClass = content.aspectRatio === "16:9" ? "aspect-video" : content.aspectRatio === "1:1" ? "aspect-square" : content.aspectRatio === "4:5" ? "aspect-[4/5]" : "aspect-[9/16]";
                           return (
-                            <button
-                              key={img.id}
-                              onClick={() => setSelectedImageIndex(i)}
-                              className={`relative ${aspectClass} rounded-lg overflow-hidden bg-muted group cursor-pointer`}
-                            >
-                              <img
-                                src={img.url}
-                                alt={`${content.type === "slide" ? "Slide" : "Image"} ${i + 1}`}
-                                className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-                              />
-                              {content.type === "slide" && (
-                                <div className="absolute bottom-2 left-2 rounded-full bg-background/80 px-2 py-0.5 text-[11px] font-medium">
-                                  {i + 1}/{images.length}
-                                </div>
-                              )}
-                            </button>
+                            <div key={img.id} className="relative group">
+                              <button
+                                onClick={() => setSelectedImageIndex(i)}
+                                className={`w-full ${aspectClass} rounded-lg overflow-hidden bg-muted cursor-pointer`}
+                              >
+                                <img
+                                  src={img.url}
+                                  alt={`${content.type === "slide" ? "Slide" : "Image"} ${i + 1}`}
+                                  className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                />
+                                {content.type === "slide" && (
+                                  <div className="absolute bottom-2 left-2 rounded-full bg-background/80 px-2 py-0.5 text-[11px] font-medium">
+                                    {i + 1}/{images.length}
+                                  </div>
+                                )}
+                              </button>
+                              <a
+                                href={img.url}
+                                download
+                                className="absolute top-2 right-2 rounded-md bg-background/80 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
+                                aria-label="Download image"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                              </a>
+                            </div>
                           );
                         })}
                       </div>
@@ -171,11 +181,16 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                     <DialogContent
                       className="sm:max-w-3xl max-h-[90vh]"
                       onKeyDown={handleKeyDown}
+                      aria-label="Image lightbox"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-describedby="lightbox-image-description"
                     >
                       <div className="flex flex-col items-center gap-3">
                         <img
                           src={images[selectedImageIndex].url}
                           alt={`Image ${selectedImageIndex + 1}`}
+                          id="lightbox-image-description"
                           className="max-h-[70vh] w-auto rounded-lg object-contain"
                         />
                         {images.length > 1 && (
@@ -218,15 +233,26 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                       </h2>
                       <div className="space-y-3">
                         {videos.map((v: { id: string; url: string }) => (
-                          <video
-                            key={v.id}
-                            src={v.url}
-                            controls
-                            className="w-full max-w-md rounded-lg bg-muted"
-                            preload="metadata"
-                          >
-                            Your browser does not support the video tag.
-                          </video>
+                          <div key={v.id} className="flex items-center gap-3">
+                            <video
+                              src={v.url}
+                              controls
+                              className="w-full max-w-md rounded-lg bg-muted"
+                              preload="metadata"
+                            >
+                              Your browser does not support the video tag.
+                            </video>
+                            <a
+                              href={v.url}
+                              download
+                              className="shrink-0"
+                              aria-label="Download video"
+                            >
+                              <Button variant="outline" size="icon-sm">
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </a>
+                          </div>
                         ))}
                       </div>
                     </CardContent>
@@ -241,16 +267,30 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                         <Volume2 className="mr-2 inline h-4 w-4 text-primary" />
                         Voiceover Audio
                       </h2>
-                      <audio
-                        controls
-                        className="w-full"
-                        preload="metadata"
-                      >
-                        {audios.map((a: { id: string; url: string }) => (
-                          <source key={a.id} src={a.url} type="audio/mpeg" />
-                        ))}
-                        Your browser does not support the audio element.
-                      </audio>
+                      <div className="flex items-center gap-3">
+                        <audio
+                          controls
+                          className="w-full"
+                          preload="metadata"
+                        >
+                          {audios.map((a: { id: string; url: string }) => (
+                            <source key={a.id} src={a.url} type="audio/mpeg" />
+                          ))}
+                          Your browser does not support the audio element.
+                        </audio>
+                        {audios[0] && (
+                          <a
+                            href={audios[0].url}
+                            download
+                            className="shrink-0"
+                            aria-label="Download audio"
+                          >
+                            <Button variant="outline" size="icon-sm">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </a>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 )}

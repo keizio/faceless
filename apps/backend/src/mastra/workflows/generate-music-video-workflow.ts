@@ -13,6 +13,7 @@ import { insertMediaAsset } from "../../lib/media.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
+import { composeVideoWithAudio } from "../../lib/compositing/video-composer.js";
 
 const musicVideoInputSchema = z.object({
   contentId: z.string(),
@@ -370,6 +371,43 @@ const generateMusicVideoClipsStep = createStep({
   },
 });
 
+const composeMusicVideoAudioStep = createStep({
+  id: "compose-music-video-audio",
+  description: "Merge video clips and overlay audio for music video",
+  inputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    videoUrls: z.array(z.string()),
+    audioUrl: z.string(),
+    audioDurationMs: z.number(),
+  }),
+  outputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    videoUrls: z.array(z.string()),
+    audioUrl: z.string(),
+    audioDurationMs: z.number(),
+  }),
+  execute: async ({ inputData }) => {
+    if (inputData.videoUrls.length <= 1 && !inputData.audioUrl) {
+      return inputData;
+    }
+
+    const compositedUrl = await composeVideoWithAudio(
+      inputData.videoUrls,
+      inputData.audioUrl,
+    );
+
+    return {
+      contentId: inputData.contentId,
+      userId: inputData.userId,
+      videoUrls: [compositedUrl],
+      audioUrl: inputData.audioUrl,
+      audioDurationMs: inputData.audioDurationMs,
+    };
+  },
+});
+
 const saveMusicVideoVersionStep = createStep({
   id: "save-music-video-version",
   description: "Save the music video version",
@@ -440,6 +478,7 @@ export const generateMusicVideoWorkflow = createWorkflow({
   .then(generateMusicStoryboardStep)
   .then(generateMusicImagesStep)
   .then(generateMusicVideoClipsStep)
+  .then(composeMusicVideoAudioStep)
   .then(saveMusicVideoVersionStep);
 
 generateMusicVideoWorkflow.commit();

@@ -1,7 +1,9 @@
 import { db } from "../db/index.js";
 import { contents, contentVersions, generationJobs, mediaAssets } from "../db/schema.js";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { enqueueContentGeneration } from "../queues/content-generation.js";
+import { UsageService } from "./usage.js";
+import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 export class ContentService {
   async createContent(
@@ -20,6 +22,11 @@ export class ContentService {
       templateInputs?: Record<string, unknown>;
     },
   ) {
+    const usageService = new UsageService();
+    const limit = await usageService.checkGenerationLimit(userId);
+    if (!limit.allowed) {
+      throw new Error(`Daily generation limit reached. You have used ${limit.limit} out of ${limit.limit} generations. Upgrade to pro for more.`);
+    }
     const [content] = await db
       .insert(contents)
       .values({
@@ -97,12 +104,21 @@ export class ContentService {
     return { ...content, versions, media, latestJobId: latestJob?.id ?? null };
   }
 
-  async listAllContents(userId: string) {
+  async listAllContents(userId: string, limit = 50, offset = 0) {
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(contents)
+      .where(eq(contents.userId, userId));
+
+    const total = totalResult?.count ?? 0;
+
     const allContents = await db
       .select()
       .from(contents)
       .where(eq(contents.userId, userId))
-      .orderBy(desc(contents.createdAt));
+      .orderBy(desc(contents.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     const contentIds = allContents.map((c) => c.id);
     const mediaByContent = new Map<string, { url: string; type: string }>();
@@ -119,10 +135,13 @@ export class ContentService {
       }
     }
 
-    return allContents.map((c) => ({
-      ...c,
-      thumbnailUrl: mediaByContent.get(c.id)?.url ?? null,
-    }));
+    return {
+      contents: allContents.map((c) => ({
+        ...c,
+        thumbnailUrl: mediaByContent.get(c.id)?.url ?? null,
+      })),
+      total,
+    };
   }
 
   async listVersions(userId: string, contentId: string) {
@@ -190,7 +209,53 @@ export class ContentService {
 
     if (!content) throw new Error("Content not found");
 
+    const assets = await db
+      .select({ url: mediaAssets.url })
+      .from(mediaAssets)
+      .where(eq(mediaAssets.contentId, contentId));
+
+    const r2Client = new S3Client({
+      region: "auto",
+      endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
+      },
+    });
+
+    const cdnBase = process.env.R2_PUBLIC_URL || "https://cdn.solutip.com";
+    for (const asset of assets) {
+      const key = asset.url.replace(`${cdnBase}/`, "");
+      if (key && key !== asset.url) {
+        try {
+          await r2Client.send(new DeleteObjectCommand({
+            Bucket: process.env.R2_BUCKET_NAME || "faceless-media",
+            Key: key,
+          }));
+        } catch {
+          // Non-critical; proceed with DB cleanup
+        }
+      }
+    }
+
     await db.delete(contents).where(eq(contents.id, contentId));
+  }
+
+  async getVersionDownloadUrl(userId: string, contentId: string, versionId: string): Promise<string | null> {
+    const [version] = await db
+      .select({ outputUrl: contentVersions.outputUrl })
+      .from(contentVersions)
+      .innerJoin(contents, eq(contentVersions.contentId, contents.id))
+      .where(
+        and(
+          eq(contents.userId, userId),
+          eq(contentVersions.contentId, contentId),
+          eq(contentVersions.id, versionId),
+        ),
+      )
+      .limit(1);
+
+    return version?.outputUrl ?? null;
   }
 
   async duplicateContent(

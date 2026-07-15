@@ -58,20 +58,18 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
 function SelectValue({ className, children: childrenProp, placeholder, ...props }: SelectPrimitive.Value.Props) {
   const ctx = React.useContext(LabelRegistryContext)
 
-  const renderChildren = React.useCallback((value: string) => {
-    if (value == null) {
-      return placeholder ?? null
-    }
-    return ctx.resolveLabel(value) ?? value
-  }, [placeholder, ctx])
-
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
       {...props}
     >
-      {childrenProp ?? renderChildren}
+      {childrenProp ?? ((value: string) => {
+        if (value == null) {
+          return placeholder ?? null
+        }
+        return ctx.resolveLabel(value) ?? value
+      })}
     </SelectPrimitive.Value>
   )
 }
@@ -156,6 +154,21 @@ function SelectLabel({
   )
 }
 
+function getTextFromChildren(children: React.ReactNode): string | undefined {
+  if (typeof children === 'string') return children
+  if (typeof children === 'number') return String(children)
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const text = getTextFromChildren(child)
+      if (text) return text
+    }
+  }
+  if (React.isValidElement<{ children?: React.ReactNode }>(children)) {
+    return getTextFromChildren(children.props.children)
+  }
+  return undefined
+}
+
 function SelectItem({
   className,
   children,
@@ -163,7 +176,7 @@ function SelectItem({
 }: SelectPrimitive.Item.Props) {
   const ctx = React.useContext(LabelRegistryContext)
   const value = props.value
-  const label = typeof children === 'string' ? children : undefined
+  const label = typeof children === 'string' ? children : getTextFromChildren(children)
 
   React.useLayoutEffect(() => {
     if (value != null) {

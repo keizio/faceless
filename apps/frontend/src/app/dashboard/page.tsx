@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ProjectGridSkeleton } from "@/components/GridSkeleton";
 import { useCreateProject, useProjects } from "@/hooks/useProjects";
+import { useStats } from "@/hooks/useStats";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,8 +37,10 @@ import { CreateContentForm } from "@/components/CreateContentForm";
 import { useRef } from "react";
 
 export default function DashboardPage() {
-  const { data: projects, isLoading } = useProjects();
+const { data: projectsData, isLoading } = useProjects();
+  const projects = projectsData?.projects;
   const { data: templates } = useTemplates();
+  const { data: stats } = useStats();
   const createProject = useCreateProject();
   const [showNewProject, setShowNewProject] = useState(false);
   const [showCreateContent, setShowCreateContent] = useState(false);
@@ -114,13 +117,13 @@ export default function DashboardPage() {
             <StatsCard
               icon={<Zap className="h-5 w-5 text-primary" />}
               label="Generated Today"
-              value="--"
+              value={stats?.generatedToday ?? "--"}
               loading={isLoading}
             />
             <StatsCard
               icon={<CheckCircle className="h-5 w-5 text-primary" />}
               label="Success Rate"
-              value="--"
+              value={stats ? `${stats.successRate}%` : "--"}
               loading={isLoading}
             />
           </div>

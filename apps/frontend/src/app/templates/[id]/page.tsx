@@ -31,7 +31,8 @@ export default function TemplateDetailPage({
 }) {
   const { id } = use(params);
   const { data: template, isLoading } = useTemplate(id);
-  const { data: projects } = useProjects();
+  const { data: projectsData } = useProjects();
+  const projects = projectsData?.projects;
   const { data: userProfile } = useUserProfile();
   const router = useRouter();
 
@@ -59,6 +60,12 @@ export default function TemplateDetailPage({
   useEffect(() => {
     if (userProfile?.language) setSelectedLanguage(userProfile.language);
   }, [userProfile]);
+
+  useEffect(() => {
+    if (projects && projects.length > 0 && !selectedProjectId) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projects, selectedProjectId]);
 
   const createContent = useCreateContent(selectedProjectId);
 
