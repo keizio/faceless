@@ -1,6 +1,6 @@
 import { db } from "../db";
-import { projects, contents } from "../db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { projects, contents, mediaAssets } from "../db/schema";
+import { eq, and, inArray, desc, sql } from "drizzle-orm";
 
 export class ProjectService {
   async listProjects(userId: string) {
@@ -19,7 +19,48 @@ export class ProjectService {
       .where(eq(projects.userId, userId))
       .groupBy(projects.id)
       .orderBy(projects.updatedAt);
-    return result;
+
+    const projectIds = result.map((p) => p.id);
+    const thumbnailsByProject = new Map<string, string[]>();
+    if (projectIds.length > 0) {
+      const recentContents = await db
+        .select({ projectId: contents.projectId, contentId: contents.id })
+        .from(contents)
+        .where(inArray(contents.projectId, projectIds))
+        .orderBy(desc(contents.createdAt));
+
+      const contentIds = recentContents.map((c) => c.contentId);
+      if (contentIds.length > 0) {
+        const media = await db
+          .select()
+          .from(mediaAssets)
+          .where(inArray(mediaAssets.contentId, contentIds))
+          .orderBy(mediaAssets.createdAt);
+
+        const firstMediaPerContent = new Map<string, string>();
+        for (const m of media) {
+          if (m.contentId && !firstMediaPerContent.has(m.contentId) && (m.type === "image" || m.type === "video")) {
+            firstMediaPerContent.set(m.contentId, m.url);
+          }
+        }
+
+        for (const rc of recentContents) {
+          const url = firstMediaPerContent.get(rc.contentId);
+          if (url) {
+            const list = thumbnailsByProject.get(rc.projectId) ?? [];
+            if (list.length < 3) {
+              list.push(url);
+              thumbnailsByProject.set(rc.projectId, list);
+            }
+          }
+        }
+      }
+    }
+
+    return result.map((p) => ({
+      ...p,
+      contentThumbnails: thumbnailsByProject.get(p.id) ?? [],
+    }));
   }
 
   async createProject(
@@ -48,7 +89,27 @@ export class ProjectService {
       .where(eq(contents.projectId, id))
       .orderBy(contents.createdAt);
 
-    return { ...project, contents: projectContents };
+    const contentIds = projectContents.map((c) => c.id);
+    const mediaByContent = new Map<string, { url: string; type: string }>();
+    if (contentIds.length > 0) {
+      const allMedia = await db
+        .select()
+        .from(mediaAssets)
+        .where(inArray(mediaAssets.contentId, contentIds))
+        .orderBy(mediaAssets.createdAt);
+      for (const m of allMedia) {
+        if (m.contentId && !mediaByContent.has(m.contentId) && (m.type === "image" || m.type === "video")) {
+          mediaByContent.set(m.contentId, { url: m.url, type: m.type });
+        }
+      }
+    }
+
+    const contentsWithMedia = projectContents.map((c) => ({
+      ...c,
+      thumbnailUrl: mediaByContent.get(c.id)?.url ?? null,
+    }));
+
+    return { ...project, contents: contentsWithMedia };
   }
 
   async deleteProject(userId: string, id: string) {

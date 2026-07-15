@@ -8,6 +8,9 @@ export const createContentSchema = z.object({
   prompt: z.string().min(1).max(2000),
   title: z.string().max(200).optional(),
   avatarId: z.string().uuid().optional(),
+  slideCount: z.number().int().min(1).max(10).optional(),
+  templateId: z.string().optional(),
+  templateInputs: z.record(z.unknown()).optional(),
 });
 
 export const createProjectSchema = z.object({
@@ -32,6 +35,7 @@ export const createAvatarSchema = z.object({
     ])
     .optional(),
   referenceImageUrl: z.string().url().optional(),
+  customPrompt: z.string().max(1000).optional(),
 });
 
 export const updateAvatarSchema = createAvatarSchema.partial();

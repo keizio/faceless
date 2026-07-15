@@ -53,6 +53,43 @@ export async function downloadAndStoreVideoUrl(
   return uploadFile(buffer, "generated.mp4", "video/mp4");
 }
 
+export async function downloadAndStoreImageUrl(
+  imageUrl: string,
+): Promise<string> {
+  if (imageUrl.startsWith(CDN_BASE + "/")) {
+    return imageUrl;
+  }
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to download image from ${imageUrl}: ${response.status} ${response.statusText}`,
+    );
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const contentType = response.headers.get("content-type") || "image/png";
+  const ext = contentType.split("/")[1] || "png";
+
+  return uploadFile(buffer, `generated.${ext}`, contentType);
+}
+
+export async function downloadAndStoreAudioUrl(
+  audioUrl: string,
+): Promise<string> {
+  if (audioUrl.startsWith(CDN_BASE + "/")) {
+    return audioUrl;
+  }
+
+  const response = await fetch(audioUrl);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to download audio from ${audioUrl}: ${response.status} ${response.statusText}`,
+    );
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return uploadFile(buffer, "generated.mp3", "audio/mpeg");
+}
+
 export function getR2PublicUrl(key: string): string {
   return `${CDN_BASE}/${key}`;
 }

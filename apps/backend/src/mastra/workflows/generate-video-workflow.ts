@@ -7,6 +7,9 @@ import {
   assembleFinalPrompt,
   assembleScenePrompt,
 } from "../../lib/prompts/prompt-builder.js";
+import { getNegativePrompt } from "../../lib/prompts/negative-prompts.js";
+import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/avatar-injector.js";
+import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -22,6 +25,12 @@ const videoInputSchema = z.object({
   sceneCount: z.number().default(3),
   language: z.string().default("en"),
   avatarId: z.string().optional(),
+  templateSystemPrompt: z.string().optional(),
+  templateVisualGuidance: z.string().optional(),
+  templateNegativeAdditions: z.array(z.string()).optional(),
+  templateScriptStructure: z.string().optional(),
+  templateNarrationGuidance: z.string().optional(),
+  templateInputs: z.record(z.unknown()).optional(),
 });
 
 const enhanceVideoPromptStep = createStep({
@@ -35,8 +44,15 @@ const enhanceVideoPromptStep = createStep({
     aspectRatio: z.string(),
     sceneCount: z.number(),
     platform: z.string(),
+    language: z.string(),
+    avatarId: z.string().optional(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
+    templateSystemPrompt: z.string().optional(),
+    templateVisualGuidance: z.string().optional(),
+    templateNegativeAdditions: z.array(z.string()).optional(),
+    templateScriptStructure: z.string().optional(),
+    templateNarrationGuidance: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
     const context = await buildPromptContext(
@@ -52,7 +68,7 @@ const enhanceVideoPromptStep = createStep({
 
     const isFaceless = !context.avatar;
 
-    const systemPrompt = `You are a visual prompt engineer for video generation. Create a storyboard-level visual prompt for a ${inputData.sceneCount}-scene video.
+    const baseSystemPrompt = `You are a visual prompt engineer for video generation. Create a storyboard-level visual prompt for a ${inputData.sceneCount}-scene video.
 
 Platform: ${inputData.platform}
 ${isFaceless ? "FACELESS MODE: NO human figures, NO faces. Focus on environments, objects, text overlays, and abstract visuals." : `AVATAR MODE: Character: ${context.avatar!.name}, ${context.avatar!.age ?? ""} years old, ${context.avatar!.gender ?? ""}, style: ${context.avatar!.speechStyle ?? "neutral"}.`}
@@ -63,6 +79,10 @@ Output format: JSON with {
   "qualityTags": string[],
   "scenePrompts": string[] (${inputData.sceneCount} individual scene visual descriptions)
 }`;
+
+    const systemPrompt = inputData.templateSystemPrompt
+      ? `${inputData.templateSystemPrompt}\n\n${inputData.templateVisualGuidance ? `Visual guidance: ${inputData.templateVisualGuidance}` : ""}\n\nPlatform: ${inputData.platform}\n${isFaceless ? "FACELESS MODE: NO human figures, NO faces." : `AVATAR MODE: Character: ${context.avatar!.name}.`}\n\nOutput format: JSON with {\n  "visualPrompt": string (overall storyboard visual description),\n  "cameraDirection": { "shotType": string, "movement"?: string, "lighting": string, "composition"?: string, "style"?: string },\n  "qualityTags": string[],\n  "scenePrompts": string[] (${inputData.sceneCount} individual scene visual descriptions)\n}`
+      : baseSystemPrompt;
 
     const result = await textProvider.generate({
       system: systemPrompt,
@@ -110,8 +130,133 @@ Output format: JSON with {
       aspectRatio: inputData.aspectRatio,
       sceneCount: inputData.sceneCount,
       platform: inputData.platform,
+      language: inputData.language,
+      avatarId: inputData.avatarId,
       enhancedPrompt: enhanced,
       promptContext: contextData,
+      templateSystemPrompt: inputData.templateSystemPrompt,
+      templateVisualGuidance: inputData.templateVisualGuidance,
+      templateNegativeAdditions: inputData.templateNegativeAdditions,
+      templateScriptStructure: inputData.templateScriptStructure,
+      templateNarrationGuidance: inputData.templateNarrationGuidance,
+    };
+  },
+});
+
+const generateVideoScriptStep = createStep({
+  id: "generate-video-script",
+  description: "Generate script, caption, and narration text for the video",
+  inputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    prompt: z.string(),
+    aspectRatio: z.string(),
+    sceneCount: z.number(),
+    platform: z.string(),
+    language: z.string(),
+    avatarId: z.string().optional(),
+    enhancedPrompt: z.any(),
+    promptContext: z.any(),
+    templateSystemPrompt: z.string().optional(),
+    templateVisualGuidance: z.string().optional(),
+    templateNegativeAdditions: z.array(z.string()).optional(),
+    templateScriptStructure: z.string().optional(),
+    templateNarrationGuidance: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    prompt: z.string(),
+    aspectRatio: z.string(),
+    sceneCount: z.number(),
+    platform: z.string(),
+    language: z.string(),
+    avatarId: z.string().optional(),
+    enhancedPrompt: z.any(),
+    promptContext: z.any(),
+    script: z.string(),
+    caption: z.string(),
+    narrationText: z.string(),
+  }),
+  execute: async ({ inputData }) => {
+    const textProvider = getProviders().text;
+    const strategy = PLATFORM_STRATEGIES[inputData.platform as Platform] ?? PLATFORM_STRATEGIES.generic;
+
+    const isFaceless = !inputData.avatarId;
+    let avatarContext = "";
+    if (inputData.avatarId) {
+      const { buildAvatarContext } = await import("../../lib/prompts/avatar-injector.js");
+      const avatar = await buildAvatarContext(inputData.avatarId);
+      avatarContext = renderAvatarForText(avatar);
+    } else {
+      avatarContext = renderNoAvatarGuidance();
+    }
+
+    const baseSystemPrompt = `You are a professional script writer for faceless social media videos.
+Generate an engaging script for a ${inputData.sceneCount}-scene video on ${inputData.platform}.
+The script should hook the viewer in the first 3 seconds.
+
+Platform: ${inputData.platform}
+${strategy.visualStyleGuidance}
+
+${isFaceless ? "FACELESS MODE: No human figures or faces. Focus on environment, objects, typography, and abstract visuals." : `AVATAR MODE: Write in this character's voice:\n${avatarContext}`}
+
+Language: ${inputData.language}
+
+Output format: JSON with "hook", "body", "cta", "caption" (with hashtags), and "narration" (full voiceover text for the entire video).
+
+CRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include scene numbering in the visual description.`;
+
+    const systemPrompt = inputData.templateSystemPrompt
+      ? `${inputData.templateSystemPrompt}\n\n${inputData.templateScriptStructure ? `Script structure: ${inputData.templateScriptStructure}` : ""}\n\n${inputData.templateNarrationGuidance ? `Narration: ${inputData.templateNarrationGuidance}` : ""}\n\nLanguage: ${inputData.language}\n\nOutput format: JSON with "hook", "body", "cta", "caption" (with hashtags), and "narration" (full voiceover text for the entire video).\n\nCRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include scene numbering in the visual description.`
+      : baseSystemPrompt;
+
+    const scriptResult = await textProvider.generate({
+      system: systemPrompt,
+      prompt: `Create a ${inputData.sceneCount}-scene video script for ${inputData.platform} about: ${inputData.prompt}`,
+      temperature: 0.8,
+    });
+
+    let script = scriptResult;
+    let caption = "";
+    let narrationText = "";
+
+    try {
+      const parsed = JSON.parse(scriptResult);
+      script = `${parsed.hook}\n\n${parsed.body}\n\n${parsed.cta}`;
+      caption = parsed.caption ?? "";
+      narrationText = parsed.narration ?? script;
+    } catch {
+      script = scriptResult;
+      narrationText = scriptResult;
+    }
+
+    await db
+      .update(contents)
+      .set({
+        script,
+        metadata: {
+          enhancedPrompt: inputData.enhancedPrompt,
+          hasAvatar: !!inputData.avatarId,
+          platform: inputData.platform,
+        },
+      })
+      .where(eq(contents.id, inputData.contentId));
+
+    return {
+      contentId: inputData.contentId,
+      userId: inputData.userId,
+      prompt: inputData.prompt,
+      aspectRatio: inputData.aspectRatio,
+      sceneCount: inputData.sceneCount,
+      platform: inputData.platform,
+      language: inputData.language,
+      avatarId: inputData.avatarId,
+      enhancedPrompt: inputData.enhancedPrompt,
+      promptContext: inputData.promptContext,
+      script,
+      caption,
+      narrationText,
     };
   },
 });
@@ -126,8 +271,13 @@ const generateVideoImagesStep = createStep({
     aspectRatio: z.string(),
     sceneCount: z.number(),
     platform: z.string(),
+    language: z.string(),
+    avatarId: z.string().optional(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
+    script: z.string(),
+    caption: z.string(),
+    narrationText: z.string(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -142,6 +292,9 @@ const generateVideoImagesStep = createStep({
     ),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
+    script: z.string(),
+    caption: z.string(),
+    narrationText: z.string(),
   }),
   execute: async ({ inputData }) => {
     const size = getImageSize(inputData.aspectRatio);
@@ -180,9 +333,11 @@ const generateVideoImagesStep = createStep({
         i,
         inputData.sceneCount,
         previousScenePrompt,
+        true,
       );
 
-      const imageUrl = await getProviders().image.generate(scenePrompt, size);
+      const negativePrompt = getNegativePrompt(contextData.platform as Platform);
+      const imageUrl = await getProviders().image.generate(scenePrompt, size, undefined, { negativePrompt, qualityTags: enhanced.qualityTags });
 
       await db.insert(mediaAssets).values({
         userId: inputData.userId,
@@ -215,6 +370,9 @@ const generateVideoImagesStep = createStep({
       scenes,
       enhancedPrompt: inputData.enhancedPrompt,
       promptContext: inputData.promptContext,
+      script: inputData.script,
+      caption: inputData.caption,
+      narrationText: inputData.narrationText,
     };
   },
 });
@@ -235,11 +393,17 @@ const generateVideoClipsStep = createStep({
     ),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
+    script: z.string(),
+    caption: z.string(),
+    narrationText: z.string(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
     videoUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    narrationText: z.string(),
   }),
   execute: async ({ inputData }) => {
     const contextData = inputData.promptContext as {
@@ -271,6 +435,69 @@ const generateVideoClipsStep = createStep({
       contentId: inputData.contentId,
       userId: inputData.userId,
       videoUrls,
+      script: inputData.script,
+      caption: inputData.caption,
+      narrationText: inputData.narrationText,
+    };
+  },
+});
+
+const generateVoiceoverStep = createStep({
+  id: "generate-voiceover",
+  description: "Generate TTS voiceover audio from the video script narration",
+  inputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    videoUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    narrationText: z.string(),
+  }),
+  outputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    videoUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
+  }),
+  execute: async ({ inputData }) => {
+    if (!inputData.narrationText) {
+      return {
+        contentId: inputData.contentId,
+        userId: inputData.userId,
+        videoUrls: inputData.videoUrls,
+        script: inputData.script,
+        caption: inputData.caption,
+        audioUrl: undefined,
+        audioDurationMs: undefined,
+      };
+    }
+
+    const audioProvider = getProviders().audio;
+    const audioResult = await audioProvider.generate(inputData.narrationText);
+
+    await db.insert(mediaAssets).values({
+      userId: inputData.userId,
+      contentId: inputData.contentId,
+      type: "audio",
+      url: audioResult.url,
+      provider: "dashscope",
+      metadata: {
+        durationMs: audioResult.durationMs,
+        source: "cosyvoice-tts",
+      },
+    });
+
+    return {
+      contentId: inputData.contentId,
+      userId: inputData.userId,
+      videoUrls: inputData.videoUrls,
+      script: inputData.script,
+      caption: inputData.caption,
+      audioUrl: audioResult.url,
+      audioDurationMs: audioResult.durationMs,
     };
   },
 });
@@ -282,11 +509,18 @@ const saveVideoVersionStep = createStep({
     contentId: z.string(),
     userId: z.string(),
     videoUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
     versionId: z.string(),
     videoUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    audioUrl: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
     const existingVersions = await db.query.contentVersions.findMany({
@@ -301,7 +535,15 @@ const saveVideoVersionStep = createStep({
         contentId: inputData.contentId,
         versionNumber,
         outputUrl: inputData.videoUrls[0] ?? null,
-        metadata: { type: "video", videoUrls: inputData.videoUrls },
+        thumbnailUrl: null,
+        metadata: {
+          type: "video",
+          videoUrls: inputData.videoUrls,
+          caption: inputData.caption,
+          script: inputData.script,
+          audioUrl: inputData.audioUrl,
+          audioDurationMs: inputData.audioDurationMs,
+        },
       })
       .returning();
 
@@ -314,6 +556,9 @@ const saveVideoVersionStep = createStep({
       contentId: inputData.contentId,
       versionId: version.id,
       videoUrls: inputData.videoUrls,
+      script: inputData.script,
+      caption: inputData.caption,
+      audioUrl: inputData.audioUrl,
     };
   },
 });
@@ -325,11 +570,16 @@ export const generateVideoWorkflow = createWorkflow({
     contentId: z.string(),
     versionId: z.string(),
     videoUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    audioUrl: z.string().optional(),
   }),
 })
   .then(enhanceVideoPromptStep)
+  .then(generateVideoScriptStep)
   .then(generateVideoImagesStep)
   .then(generateVideoClipsStep)
+  .then(generateVoiceoverStep)
   .then(saveVideoVersionStep);
 
 generateVideoWorkflow.commit();

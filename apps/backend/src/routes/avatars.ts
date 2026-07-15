@@ -74,7 +74,9 @@ avatarRoutes.delete("/:id", async (c) => {
 avatarRoutes.post("/:id/generate", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+  const customPrompt = body.customPrompt as string | undefined;
   const service = new AvatarService();
-  const result = await service.generateCharacterSheet(userId, id);
+  const result = await service.generateCharacterSheet(userId, id, customPrompt);
   return c.json(result);
 });

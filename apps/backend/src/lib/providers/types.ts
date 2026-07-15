@@ -16,6 +16,11 @@ export interface GenerateVideoOptions {
   negativePrompt?: string;
 }
 
+export interface AudioResult {
+  url: string;
+  durationMs: number;
+}
+
 export interface TextProvider {
   generate(options: GenerateTextOptions): Promise<string>;
 }
@@ -39,8 +44,18 @@ export interface VideoProvider {
   ): Promise<string[]>;
 }
 
+export interface AudioProvider {
+  generate(text: string, voice?: string): Promise<AudioResult>;
+}
+
+export interface MusicProvider {
+  generate(prompt: string, duration?: number): Promise<AudioResult>;
+}
+
 export interface Providers {
   text: TextProvider;
   image: ImageProvider;
   video: VideoProvider;
+  audio: AudioProvider;
+  music: MusicProvider;
 }

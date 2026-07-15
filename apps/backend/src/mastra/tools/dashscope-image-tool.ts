@@ -21,15 +21,10 @@ export const dashscopeImageTool = createTool({
   execute: async (ctx) => {
     const size = getImageSize(ctx.context.aspectRatio);
 
-    let prompt = ctx.context.prompt;
-    if (ctx.context.qualityTags?.length) {
-      prompt += `, ${ctx.context.qualityTags.join(", ")}`;
-    }
-    if (ctx.context.negativePrompt) {
-      prompt += ` --neg ${ctx.context.negativePrompt}`;
-    }
-
-    const url = await getProviders().image.generate(prompt, size);
+    const url = await getProviders().image.generate(ctx.context.prompt, size, undefined, {
+      negativePrompt: ctx.context.negativePrompt,
+      qualityTags: ctx.context.qualityTags,
+    });
     return { url };
   },
 });

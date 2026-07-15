@@ -1,8 +1,9 @@
 import { mastra } from "../mastra/index.js";
 import { db } from "../db/index.js";
-import { contents, generationJobs } from "../db/schema.js";
+import { contents, generationJobs, users } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { NotificationService } from "../services/notification.js";
+import { buildTemplatePrompt } from "../lib/templates/prompt-builder.js";
 import type { GenerationJobPayload } from "../lib/queue.js";
 
 const WORKFLOW_TIMEOUT = 600_000;
@@ -35,12 +36,35 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
     let result: unknown;
 
     const aspectRatio = payload.aspectRatio ?? "9:16";
-    const language = payload.language ?? "en";
+    let language = payload.language;
+    if (!language) {
+      const [user] = await db
+        .select({ language: users.language })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      language = user?.language ?? "en";
+    }
+
+    let templatePrompts = null;
+    if (payload.templateId && payload.templateInputs) {
+      templatePrompts = buildTemplatePrompt(payload.templateId, payload.templateInputs);
+    }
+
+    const templateOverrides = templatePrompts
+      ? {
+          templateSystemPrompt: templatePrompts.systemPrompt,
+          templateVisualGuidance: templatePrompts.visualGuidance,
+          templateNegativeAdditions: templatePrompts.negativeAdditions,
+          templateScriptStructure: templatePrompts.scriptStructure,
+          templateNarrationGuidance: templatePrompts.narrationGuidance,
+        }
+      : {};
 
     switch (contentType) {
       case "image": {
         const workflow = mastra.getWorkflow("generateImageWorkflow");
-        const run = await workflow.createRun();
+        const run = await workflow.createRunAsync();
         result = await withTimeout(
           run.start({
             inputData: {
@@ -51,6 +75,7 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
               aspectRatio,
               language,
               avatarId,
+              ...templateOverrides,
             },
           }),
           WORKFLOW_TIMEOUT,
@@ -59,23 +84,48 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
       }
 
       case "video": {
-        const workflow = mastra.getWorkflow("generateVideoWorkflow");
-        const run = await workflow.createRun();
-        result = await withTimeout(
-          run.start({
-            inputData: {
-              contentId,
-              userId,
-              prompt: prompt ?? "",
-              platform: platform ?? "generic",
-              aspectRatio,
-              sceneCount: 3,
-              language,
-              avatarId,
-            },
-          }),
-          WORKFLOW_TIMEOUT,
-        );
+        if (payload.templateId === "ai-music-video") {
+          const ti = payload.templateInputs ?? {};
+          const workflow = mastra.getWorkflow("generateMusicVideoWorkflow");
+          const run = await workflow.createRunAsync();
+          result = await withTimeout(
+            run.start({
+              inputData: {
+                contentId,
+                userId,
+                prompt: prompt ?? "",
+                platform: platform ?? "generic",
+                aspectRatio,
+                sceneCount: 4,
+                language,
+                moodOrGenre: (ti.moodOrGenre as string) ?? "",
+                visualStyle: (ti.visualStyle as string) ?? "cinematic",
+                audioSource: (ti.audioSource as "ai-generated" | "upload") ?? "ai-generated",
+                audioFileUrl: (ti.audioFile as string) ?? undefined,
+              },
+            }),
+            WORKFLOW_TIMEOUT,
+          );
+        } else {
+          const workflow = mastra.getWorkflow("generateVideoWorkflow");
+          const run = await workflow.createRunAsync();
+          result = await withTimeout(
+            run.start({
+              inputData: {
+                contentId,
+                userId,
+                prompt: prompt ?? "",
+                platform: platform ?? "generic",
+                aspectRatio,
+                sceneCount: 3,
+                language,
+                avatarId,
+                ...templateOverrides,
+              },
+            }),
+            WORKFLOW_TIMEOUT,
+          );
+        }
         break;
       }
 
@@ -83,7 +133,7 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
       case "text":
       default: {
         const workflow = mastra.getWorkflow("generateContentWorkflow");
-        const run = await workflow.createRun();
+        const run = await workflow.createRunAsync();
         result = await withTimeout(
           run.start({
             inputData: {
@@ -98,6 +148,9 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
               prompt: prompt ?? "",
               language,
               avatarId,
+              aspectRatio,
+              slideCount: payload.slideCount ?? 3,
+              ...templateOverrides,
             },
           }),
           WORKFLOW_TIMEOUT,

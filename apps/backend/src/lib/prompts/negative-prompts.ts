@@ -25,6 +25,14 @@ const DEFAULT_NEGATIVE_PROMPT = [
   "mutated",
   "poorly drawn",
   "worst quality",
+  "social media UI overlays",
+  "fake follower count",
+  "dummy text",
+  "UI mockup",
+  "fabricated stats",
+  "@handle",
+  "@username",
+  "social media account",
 ];
 
 export function getNegativePrompt(platform: Platform): string {

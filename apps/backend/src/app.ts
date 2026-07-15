@@ -7,6 +7,9 @@ import { contentRoutes } from "./routes/contents";
 import { avatarRoutes } from "./routes/avatars";
 import { jobRoutes } from "./routes/jobs";
 import { notificationRoutes } from "./routes/notifications";
+import { settingsRoutes } from "./routes/settings";
+import { templateRoutes } from "./routes/templates";
+import { uploadRoutes } from "./routes/upload";
 import { errorHandler } from "./middleware/error-handler";
 
 type Bindings = {};
@@ -29,6 +32,10 @@ app.route("/api/contents", contentRoutes);
 app.route("/api/avatars", avatarRoutes);
 app.route("/api/jobs", jobRoutes);
 app.route("/api/notifications", notificationRoutes);
+app.route("/api/settings", settingsRoutes);
+app.route("/api/templates", templateRoutes);
+app.route("/api/upload", uploadRoutes);
+app.route("/api/upload", uploadRoutes);
 
 app.onError(errorHandler);
 

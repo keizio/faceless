@@ -2,6 +2,7 @@
 
 import { AuthGuard } from "@/components/AuthGuard";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { GenerationProgress } from "@/components/GenerationProgress";
 import { useAvatar, useUpdateAvatar, useDeleteAvatar, useGenerateAvatar, useUploadAvatarImage } from "@/hooks/useAvatars";
 import { SPEECH_STYLE_LABELS, GENDER_OPTIONS, AGE_RANGES, getAgeRangeLabel, getAgeRangeValue } from "@faceless/shared";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +45,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
   const [gender, setGender] = useState("");
   const [speechStyle, setSpeechStyle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!avatar) return;
@@ -53,6 +55,12 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
     setSpeechStyle(avatar.speechStyle || "");
     setImageUrl(avatar.referenceImageUrl || "");
   }, [avatar]);
+
+  useEffect(() => {
+    if (avatar?.characterSheetUrl) {
+      setActiveJobId(null);
+    }
+  }, [avatar?.characterSheetUrl]);
 
   const handleSave = () => {
     updateAvatar.mutate(
@@ -72,7 +80,11 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
   };
 
   const handleGenerate = () => {
-    generateAvatar.mutate(id);
+    generateAvatar.mutate(id, {
+      onSuccess: (data) => {
+        if (data?.job?.id) setActiveJobId(data.job.id);
+      },
+    });
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,7 +129,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                   <div className="flex items-center gap-2">
                     <Button
                       onClick={handleGenerate}
-                      disabled={generateAvatar.isPending}
+                      disabled={generateAvatar.isPending || (!!activeJobId && !avatar?.characterSheetUrl)}
                     >
                       {generateAvatar.isPending ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -176,6 +188,11 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Generation progress */}
+              {activeJobId && (
+                <GenerationProgress jobId={activeJobId} />
+              )}
 
               {/* Character sheet */}
               {avatar.characterSheetUrl && (

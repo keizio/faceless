@@ -16,12 +16,16 @@ import {
   LogOut,
   Plus,
   FileText,
+  Settings,
+  LayoutTemplate,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: Folder },
+  { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/avatars", label: "Avatars", icon: User },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {

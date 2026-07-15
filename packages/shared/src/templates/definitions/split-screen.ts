@@ -1,0 +1,58 @@
+import type { ContentTemplate } from "../types";
+
+export const splitScreen: ContentTemplate = {
+  id: "split-screen",
+  name: "Split Screen Comparison",
+  description:
+    "Side-by-side comparison images showing two contrasting concepts. Ideal for before/after, this vs that, expectations vs reality, and product comparisons.",
+  category: "comparison",
+  icon: "Columns",
+  thumbnailDescription: "Side-by-side comparison",
+  supportedContentTypes: ["image", "video"],
+  supportedPlatforms: ["tiktok", "instagram", "facebook", "twitter", "generic"],
+  renderMode: "composite",
+  inputFields: [
+    {
+      id: "leftDescription",
+      label: "Left Side Description",
+      type: "textarea",
+      required: true,
+      placeholder: "Describe what the left panel should show...",
+    },
+    {
+      id: "rightDescription",
+      label: "Right Side Description",
+      type: "textarea",
+      required: true,
+      placeholder: "Describe what the right panel should show...",
+    },
+    {
+      id: "orientation",
+      label: "Orientation",
+      type: "select",
+      required: true,
+      options: [
+        { value: "horizontal", label: "Side by Side" },
+        { value: "vertical", label: "Top and Bottom" },
+      ],
+      defaultValue: "horizontal",
+    },
+    {
+      id: "leftLabel",
+      label: "Left Label (optional)",
+      type: "text",
+      required: false,
+      placeholder: "e.g. Before",
+    },
+    {
+      id: "rightLabel",
+      label: "Right Label (optional)",
+      type: "text",
+      required: false,
+      placeholder: "e.g. After",
+    },
+  ],
+  defaultContentType: "image",
+  defaultPlatform: "tiktok",
+  defaultAspectRatio: "9:16",
+};

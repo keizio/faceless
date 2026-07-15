@@ -34,8 +34,12 @@ export interface GenerationJobPayload {
   language?: string;
   prompt?: string;
   avatarId?: string;
+  slideCount?: number;
   sceneIds?: string[];
   imageSize?: string;
+  customPrompt?: string;
+  templateId?: string;
+  templateInputs?: Record<string, unknown>;
 }
 
 export { redisConnection };

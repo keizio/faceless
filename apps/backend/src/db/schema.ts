@@ -57,6 +57,7 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
   name: text("name"),
   plan: text("plan").default("free").notNull(),
+  language: text("language").default("en").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -117,6 +118,8 @@ export const contents = pgTable(
     title: text("title"),
     prompt: text("prompt").notNull(),
     script: text("script"),
+    templateId: text("template_id"),
+    templateInputs: jsonb("template_inputs").$type<Record<string, unknown>>(),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -124,6 +127,7 @@ export const contents = pgTable(
   (table) => [
     index("contents_project_idx").on(table.projectId),
     index("contents_user_idx").on(table.userId),
+    index("contents_template_idx").on(table.templateId),
   ],
 );
 

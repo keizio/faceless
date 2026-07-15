@@ -7,6 +7,13 @@ export const contentRoutes = new Hono<AppEnv>();
 
 contentRoutes.use("*", verifyFirebaseToken);
 
+contentRoutes.get("/", async (c) => {
+  const userId = c.get("userId");
+  const service = new ContentService();
+  const contents = await service.listAllContents(userId);
+  return c.json({ contents });
+});
+
 contentRoutes.get("/:id", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");
@@ -41,4 +48,12 @@ contentRoutes.post("/:id/duplicate", async (c) => {
   const service = new ContentService();
   const result = await service.duplicateContent(userId, id, language);
   return c.json(result, 201);
+});
+
+contentRoutes.delete("/:id", async (c) => {
+  const userId = c.get("userId");
+  const id = c.req.param("id");
+  const service = new ContentService();
+  await service.deleteContent(userId, id);
+  return c.json({ success: true });
 });

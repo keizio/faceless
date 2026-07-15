@@ -3,6 +3,9 @@ import { z } from "zod";
 import { getProviders } from "../../lib/providers/factory.js";
 import { getImageSize } from "../../lib/providers/dashscope.js";
 import { buildPromptContext, assembleFinalPrompt } from "../../lib/prompts/prompt-builder.js";
+import { getNegativePrompt } from "../../lib/prompts/negative-prompts.js";
+import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/avatar-injector.js";
+import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -17,6 +20,11 @@ const imageInputSchema = z.object({
   aspectRatio: z.string().default("9:16"),
   language: z.string().default("en"),
   avatarId: z.string().optional(),
+  templateSystemPrompt: z.string().optional(),
+  templateVisualGuidance: z.string().optional(),
+  templateNegativeAdditions: z.array(z.string()).optional(),
+  templateScriptStructure: z.string().optional(),
+  templateNarrationGuidance: z.string().optional(),
 });
 
 const enhanceImagePromptStep = createStep({
@@ -28,7 +36,13 @@ const enhanceImagePromptStep = createStep({
     userId: z.string(),
     enhancedPrompt: z.string(),
     aspectRatio: z.string(),
+    platform: z.string(),
+    prompt: z.string(),
+    language: z.string(),
+    avatarId: z.string().optional(),
     promptMetadata: z.any(),
+    templateVisualGuidance: z.string().optional(),
+    templateNegativeAdditions: z.array(z.string()).optional(),
   }),
   execute: async ({ inputData }) => {
     const context = await buildPromptContext(
@@ -44,13 +58,13 @@ const enhanceImagePromptStep = createStep({
 
     const isFaceless = !context.avatar;
 
-    const systemPrompt = `You are a visual prompt engineer. Transform a user's content idea into a detailed image generation prompt.
+    const baseSystemPrompt = `You are a visual prompt engineer. Transform a user's content idea into a detailed image generation prompt.
 
 Platform: ${inputData.platform}
 ${isFaceless ? "FACELESS MODE: Generate content with NO human figures, NO faces. Focus on environment, objects, typography, and abstract visuals." : `AVATAR MODE: Include the character in the visual description. Avatar: ${context.avatar!.name}, ${context.avatar!.age ?? ""} years old, ${context.avatar!.gender ?? ""}, speech style: ${context.avatar!.speechStyle ?? "neutral"}.`}
 
 Output format: JSON with {
-  "visualPrompt": string (rich visual description under 200 words),
+  "visualPrompt": string (rich visual description 200-400 words),
   "cameraDirection": {
     "shotType": "close-up" | "medium-shot" | "wide-shot" | "establishing-shot" | "pov" | "over-the-shoulder" | "dutch-angle" | "aerial",
     "movement"?: "static" | "pan" | "tilt" | "zoom" | "tracking" | "dolly" | "handheld" | "drone",
@@ -60,6 +74,10 @@ Output format: JSON with {
   },
   "qualityTags": string[]
 }`;
+
+    const systemPrompt = inputData.templateSystemPrompt
+      ? `${inputData.templateSystemPrompt}\n\n${inputData.templateVisualGuidance ? `Visual guidance: ${inputData.templateVisualGuidance}` : ""}\n\nPlatform: ${inputData.platform}\n${isFaceless ? "FACELESS MODE: NO human figures, NO faces." : `AVATAR MODE: Character: ${context.avatar!.name}.`}\n\nOutput format: JSON with {\n  "visualPrompt": string (rich visual description 200-400 words),\n  "cameraDirection": { "shotType": string, "movement"?: string, "lighting": string, "composition"?: string, "style"?: string },\n  "qualityTags": string[]\n}`
+      : baseSystemPrompt;
 
     const result = await textProvider.generate({
       system: systemPrompt,
@@ -91,13 +109,17 @@ Output format: JSON with {
       };
     }
 
-    const finalPrompt = assembleFinalPrompt(enhanced, context);
+    const finalPrompt = assembleFinalPrompt(enhanced, context, true);
 
     return {
       contentId: inputData.contentId,
       userId: inputData.userId,
       enhancedPrompt: finalPrompt,
       aspectRatio: inputData.aspectRatio,
+      platform: inputData.platform,
+      prompt: inputData.prompt,
+      language: inputData.language,
+      avatarId: inputData.avatarId,
       promptMetadata: {
         enhanced,
         context: {
@@ -106,6 +128,108 @@ Output format: JSON with {
           avatarName: context.avatar?.name,
         },
       },
+      templateVisualGuidance: inputData.templateVisualGuidance,
+      templateNegativeAdditions: inputData.templateNegativeAdditions,
+    };
+  },
+});
+
+const generateImageScriptStep = createStep({
+  id: "generate-image-script",
+  description: "Generate script and caption for the image",
+  inputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    enhancedPrompt: z.string(),
+    aspectRatio: z.string(),
+    platform: z.string(),
+    prompt: z.string(),
+    language: z.string(),
+    avatarId: z.string().optional(),
+    promptMetadata: z.any(),
+    templateSystemPrompt: z.string().optional(),
+    templateVisualGuidance: z.string().optional(),
+    templateNegativeAdditions: z.array(z.string()).optional(),
+    templateScriptStructure: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    enhancedPrompt: z.string(),
+    aspectRatio: z.string(),
+    promptMetadata: z.any(),
+    script: z.string(),
+    caption: z.string(),
+  }),
+  execute: async ({ inputData }) => {
+    const textProvider = getProviders().text;
+    const strategy = PLATFORM_STRATEGIES[inputData.platform as Platform] ?? PLATFORM_STRATEGIES.generic;
+
+    const isFaceless = !inputData.avatarId;
+    let avatarContext = "";
+    if (inputData.avatarId) {
+      const { buildAvatarContext } = await import("../../lib/prompts/avatar-injector.js");
+      const avatar = await buildAvatarContext(inputData.avatarId);
+      avatarContext = renderAvatarForText(avatar);
+    } else {
+      avatarContext = renderNoAvatarGuidance();
+    }
+
+    const baseSystemPrompt = `You are a professional social media caption writer for faceless content.
+Generate an engaging caption for a ${inputData.platform} image post.
+
+Platform: ${inputData.platform}
+${strategy.visualStyleGuidance}
+
+${isFaceless ? "FACELESS MODE: No human figures or faces. Focus on the visual theme." : `AVATAR MODE: Write in this character's voice:\n${avatarContext}`}
+
+Language: ${inputData.language}
+
+Output format: JSON with "hook", "body", "cta", "caption" (with hashtags).
+
+CRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include slide numbers or scene numbering in the visual description.`;
+
+    const systemPrompt = inputData.templateSystemPrompt
+      ? `${inputData.templateSystemPrompt}\n\nLanguage: ${inputData.language}\n\nOutput format: JSON with "hook", "body", "cta", "caption" (with hashtags).\n\nCRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script.`
+      : baseSystemPrompt;
+
+    const scriptResult = await textProvider.generate({
+      system: systemPrompt,
+      prompt: `Write a social media caption for this image post about: ${inputData.prompt}`,
+      temperature: 0.8,
+    });
+
+    let script = scriptResult;
+    let caption = "";
+
+    try {
+      const parsed = JSON.parse(scriptResult);
+      script = `${parsed.hook}\n\n${parsed.body}\n\n${parsed.cta}`;
+      caption = parsed.caption ?? "";
+    } catch {
+      script = scriptResult;
+    }
+
+    await db
+      .update(contents)
+      .set({
+        script,
+        metadata: {
+          enhancedPrompt: inputData.enhancedPrompt,
+          hasAvatar: !!inputData.avatarId,
+          platform: inputData.platform,
+        },
+      })
+      .where(eq(contents.id, inputData.contentId));
+
+    return {
+      contentId: inputData.contentId,
+      userId: inputData.userId,
+      enhancedPrompt: inputData.enhancedPrompt,
+      aspectRatio: inputData.aspectRatio,
+      promptMetadata: inputData.promptMetadata,
+      script,
+      caption,
     };
   },
 });
@@ -119,15 +243,22 @@ const generateImageStep = createStep({
     enhancedPrompt: z.string(),
     aspectRatio: z.string(),
     promptMetadata: z.any(),
+    script: z.string(),
+    caption: z.string(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
     imageUrl: z.string(),
+    script: z.string(),
+    caption: z.string(),
   }),
   execute: async ({ inputData }) => {
     const size = getImageSize(inputData.aspectRatio);
-    const imageUrl = await getProviders().image.generate(inputData.enhancedPrompt, size);
+    const platform = inputData.promptMetadata?.context?.platform as Platform | undefined;
+    const negativePrompt = platform ? getNegativePrompt(platform) : "";
+    const qualityTags = (inputData.promptMetadata?.enhanced as EnhancedPrompt | undefined)?.qualityTags;
+    const imageUrl = await getProviders().image.generate(inputData.enhancedPrompt, size, undefined, { negativePrompt, qualityTags });
 
     await db.insert(mediaAssets).values({
       userId: inputData.userId,
@@ -146,6 +277,8 @@ const generateImageStep = createStep({
       contentId: inputData.contentId,
       userId: inputData.userId,
       imageUrl,
+      script: inputData.script,
+      caption: inputData.caption,
     };
   },
 });
@@ -157,11 +290,15 @@ const saveImageVersionStep = createStep({
     contentId: z.string(),
     userId: z.string(),
     imageUrl: z.string(),
+    script: z.string(),
+    caption: z.string(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
     versionId: z.string(),
     imageUrl: z.string(),
+    script: z.string(),
+    caption: z.string(),
   }),
   execute: async ({ inputData }) => {
     const existingVersions = await db.query.contentVersions.findMany({
@@ -177,7 +314,11 @@ const saveImageVersionStep = createStep({
         versionNumber,
         outputUrl: inputData.imageUrl,
         thumbnailUrl: inputData.imageUrl,
-        metadata: { type: "image" },
+        metadata: {
+          type: "image",
+          caption: inputData.caption,
+          script: inputData.script,
+        },
       })
       .returning();
 
@@ -190,6 +331,8 @@ const saveImageVersionStep = createStep({
       contentId: inputData.contentId,
       versionId: version.id,
       imageUrl: inputData.imageUrl,
+      script: inputData.script,
+      caption: inputData.caption,
     };
   },
 });
@@ -201,9 +344,12 @@ export const generateImageWorkflow = createWorkflow({
     contentId: z.string(),
     versionId: z.string(),
     imageUrl: z.string(),
+    script: z.string(),
+    caption: z.string(),
   }),
 })
   .then(enhanceImagePromptStep)
+  .then(generateImageScriptStep)
   .then(generateImageStep)
   .then(saveImageVersionStep);
 

@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 const JWT_SECRET = process.env.JWT_SECRET || "change-me";
 
 export class AuthService {
-  async createSession(firebaseUid: string, email: string) {
+  async createSession(firebaseUid: string, email: string, language?: string) {
     let [user] = await db
       .select()
       .from(users)
@@ -16,7 +16,7 @@ export class AuthService {
     if (!user) {
       [user] = await db
         .insert(users)
-        .values({ id: firebaseUid, email })
+        .values({ id: firebaseUid, email, language: language ?? "en" })
         .returning();
     }
 
@@ -34,5 +34,14 @@ export class AuthService {
       .where(eq(users.id, firebaseUid))
       .limit(1);
     return user || null;
+  }
+
+  async updateLanguage(firebaseUid: string, language: string) {
+    const [user] = await db
+      .update(users)
+      .set({ language, updatedAt: new Date() })
+      .where(eq(users.id, firebaseUid))
+      .returning();
+    return user;
   }
 }

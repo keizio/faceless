@@ -1,6 +1,6 @@
 import { db } from "../db/index.js";
-import { contents, contentVersions, generationJobs } from "../db/schema.js";
-import { eq, and, desc } from "drizzle-orm";
+import { contents, contentVersions, generationJobs, mediaAssets } from "../db/schema.js";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import { enqueueContentGeneration } from "../queues/content-generation.js";
 
 export class ContentService {
@@ -15,6 +15,9 @@ export class ContentService {
       prompt: string;
       title?: string;
       avatarId?: string;
+      slideCount?: number;
+      templateId?: string;
+      templateInputs?: Record<string, unknown>;
     },
   ) {
     const [content] = await db
@@ -29,6 +32,8 @@ export class ContentService {
         language: data.language,
         prompt: data.prompt,
         title: data.title,
+        templateId: data.templateId ?? null,
+        templateInputs: data.templateInputs ?? null,
         status: "queued",
       })
       .returning();
@@ -53,6 +58,9 @@ export class ContentService {
       language: data.language,
       prompt: data.prompt,
       avatarId: data.avatarId,
+      slideCount: data.slideCount,
+      templateId: data.templateId,
+      templateInputs: data.templateInputs,
     });
 
     return { content, job };
@@ -80,7 +88,41 @@ export class ContentService {
       .orderBy(desc(generationJobs.createdAt))
       .limit(1);
 
-    return { ...content, versions, latestJobId: latestJob?.id ?? null };
+    const media = await db
+      .select()
+      .from(mediaAssets)
+      .where(eq(mediaAssets.contentId, id))
+      .orderBy(mediaAssets.createdAt);
+
+    return { ...content, versions, media, latestJobId: latestJob?.id ?? null };
+  }
+
+  async listAllContents(userId: string) {
+    const allContents = await db
+      .select()
+      .from(contents)
+      .where(eq(contents.userId, userId))
+      .orderBy(desc(contents.createdAt));
+
+    const contentIds = allContents.map((c) => c.id);
+    const mediaByContent = new Map<string, { url: string; type: string }>();
+    if (contentIds.length > 0) {
+      const allMedia = await db
+        .select()
+        .from(mediaAssets)
+        .where(inArray(mediaAssets.contentId, contentIds))
+        .orderBy(mediaAssets.createdAt);
+      for (const m of allMedia) {
+        if (m.contentId && !mediaByContent.has(m.contentId) && (m.type === "image" || m.type === "video")) {
+          mediaByContent.set(m.contentId, { url: m.url, type: m.type });
+        }
+      }
+    }
+
+    return allContents.map((c) => ({
+      ...c,
+      thumbnailUrl: mediaByContent.get(c.id)?.url ?? null,
+    }));
   }
 
   async listVersions(userId: string, contentId: string) {
@@ -126,9 +168,23 @@ export class ContentService {
       language: content.language,
       prompt: content.prompt,
       avatarId: content.avatarId ?? undefined,
+      templateId: content.templateId ?? undefined,
+      templateInputs: content.templateInputs ?? undefined,
     });
 
     return { job };
+  }
+
+  async deleteContent(userId: string, contentId: string) {
+    const [content] = await db
+      .select({ id: contents.id })
+      .from(contents)
+      .where(and(eq(contents.id, contentId), eq(contents.userId, userId)))
+      .limit(1);
+
+    if (!content) throw new Error("Content not found");
+
+    await db.delete(contents).where(eq(contents.id, contentId));
   }
 
   async duplicateContent(
@@ -152,6 +208,8 @@ export class ContentService {
       prompt: content.prompt,
       title: content.title ? `${content.title} (${newLanguage})` : undefined,
       avatarId: content.avatarId ?? undefined,
+      templateId: content.templateId ?? undefined,
+      templateInputs: content.templateInputs ?? undefined,
     });
   }
 }

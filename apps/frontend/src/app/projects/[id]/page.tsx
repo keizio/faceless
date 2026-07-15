@@ -3,20 +3,13 @@
 import { AuthGuard } from "@/components/AuthGuard";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ContentCreator } from "@/components/ContentCreator";
-import { StatusBadge } from "@/components/StatusBadge";
+import { ContentCard } from "@/components/ContentCard";
 import { useProject } from "@/hooks/useProjects";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { use } from "react";
-import { ChevronLeft, Image, Presentation, Video, FileText } from "lucide-react";
-
-const TYPE_ICONS: Record<string, typeof Image> = {
-  image: Image,
-  slide: Presentation,
-  video: Video,
-  text: FileText,
-};
+import { ChevronLeft } from "lucide-react";
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -61,7 +54,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   <h2 className="mb-4 text-lg font-semibold text-foreground">
                     Content ({project.contents.length})
                   </h2>
-                  <div className="isometric-grid grid gap-4 sm:grid-cols-2">
+                  <div className="isometric-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {project.contents.map(
                       (content: {
                         id: string;
@@ -70,37 +63,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         platform: string;
                         status: string;
                         createdAt: string;
-                      }) => {
-                        const TypeIcon = TYPE_ICONS[content.type] || FileText;
-                        return (
-                          <Link
-                            key={content.id}
-                            href={`/contents/${content.id}`}
-                            className="isometric-card"
-                          >
-                            <Card className="h-full border-border/50 depth-2 group cursor-pointer transition-all duration-200 hover:bg-muted/50">
-                              <CardContent className="p-5">
-                                <div className="flex items-start justify-between">
-                                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                                    <TypeIcon className="h-5 w-5 text-primary" />
-                                  </div>
-                                  <StatusBadge status={content.status} />
-                                </div>
-                                <h3 className="mt-3 font-medium text-foreground">
-                                  {content.title || "Untitled"}
-                                </h3>
-                                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground/70 flex-wrap">
-                                  <span className="capitalize">{content.type}</span>
-                                  <span>·</span>
-                                  <span className="capitalize">{content.platform}</span>
-                                  <span>·</span>
-                                  <span>{new Date(content.createdAt).toLocaleDateString()}</span>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </Link>
-                        );
-                      },
+                        thumbnailUrl: string | null;
+                      }) => (
+                        <ContentCard
+                          key={content.id}
+                          id={content.id}
+                          title={content.title}
+                          type={content.type}
+                          platform={content.platform}
+                          status={content.status}
+                          createdAt={content.createdAt}
+                          thumbnailUrl={content.thumbnailUrl}
+                        />
+                      ),
                     )}
                   </div>
                 </section>

@@ -45,38 +45,48 @@ export async function buildPromptContext(
   return context;
 }
 
+const ASPECT_LABELS: Record<string, string> = {
+  "9:16": "9:16 (vertical portrait)",
+  "16:9": "16:9 (widescreen landscape)",
+  "1:1": "1:1 (square)",
+  "4:5": "4:5 (portrait)",
+};
+
 export function assembleFinalPrompt(
   enhanced: EnhancedPrompt,
   context: PromptContext,
+  isStillImage?: boolean,
 ): string {
-  const parts: string[] = [enhanced.visualPrompt];
+  const sections: string[] = [];
 
-  const cameraText = renderCameraDirection(enhanced.cameraDirection);
-  parts.push(cameraText);
+  sections.push(`Visual description: ${enhanced.visualPrompt}`);
+
+  const camera = { ...enhanced.cameraDirection };
+  if (isStillImage) {
+    delete camera.movement;
+  }
+  const cameraText = renderCameraDirection(camera);
+  sections.push(`Camera: ${cameraText}`);
 
   if (enhanced.qualityTags.length > 0) {
-    parts.push(enhanced.qualityTags.join(", "));
+    sections.push(`Quality: ${enhanced.qualityTags.join(", ")}`);
   }
 
   const platformStrategy = PLATFORM_STRATEGIES[context.platform];
 
   if (context.avatar) {
     const avatarVisual = renderAvatarForVisual(context.avatar);
-    parts.push(avatarVisual);
+    sections.push(`Character: ${avatarVisual}`);
   } else {
-    parts.push(renderNoAvatarGuidance());
+    sections.push(renderNoAvatarGuidance());
   }
 
-  parts.push(platformStrategy.compositionGuidance);
+  sections.push(`Composition: ${platformStrategy.compositionGuidance}`);
 
-  let prompt = parts.join(", ");
+  const aspectLabel = ASPECT_LABELS[context.aspectRatio] ?? context.aspectRatio;
+  sections.push(`Aspect ratio: ${aspectLabel}`);
 
-  const negativeText = getNegativePrompt(context.platform);
-  if (negativeText) {
-    prompt += ` --neg ${negativeText}`;
-  }
-
-  return prompt;
+  return sections.join("\n\n");
 }
 
 export function assembleScenePrompt(
@@ -85,47 +95,46 @@ export function assembleScenePrompt(
   sceneIndex: number,
   totalScenes: number,
   previousScenePrompt?: string,
+  isStillImage?: boolean,
 ): string {
-  const sceneParts: string[] = [enhanced.visualPrompt];
+  const sections: string[] = [];
 
-  const sceneContext = `Scene ${sceneIndex + 1} of ${totalScenes}`;
-  sceneParts.push(sceneContext);
+  sections.push(`Visual description: ${enhanced.visualPrompt}`);
 
   const sceneCameraDefaults = cameraDirectionForScene(sceneIndex, totalScenes);
   const sceneCamera = {
     ...enhanced.cameraDirection,
     ...sceneCameraDefaults,
   };
+  if (isStillImage) {
+    delete sceneCamera.movement;
+  }
   const cameraText = renderCameraDirection(sceneCamera);
-  sceneParts.push(cameraText);
+  sections.push(`Camera: ${cameraText}`);
 
   if (enhanced.qualityTags.length > 0) {
-    sceneParts.push(enhanced.qualityTags.join(", "));
+    sections.push(`Quality: ${enhanced.qualityTags.join(", ")}`);
   }
 
   const platformStrategy = PLATFORM_STRATEGIES[context.platform];
 
   if (context.avatar) {
     const avatarVisual = renderAvatarForVisual(context.avatar);
-    sceneParts.push(avatarVisual);
+    sections.push(`Character: ${avatarVisual}`);
   } else {
-    sceneParts.push(renderNoAvatarGuidance());
+    sections.push(renderNoAvatarGuidance());
   }
 
   if (previousScenePrompt) {
-    sceneParts.push(
-      `maintain visual continuity with previous scene: ${previousScenePrompt}`,
+    sections.push(
+      `Previous scene: ${previousScenePrompt}`,
     );
   }
 
-  sceneParts.push(platformStrategy.compositionGuidance);
+  sections.push(`Composition: ${platformStrategy.compositionGuidance}`);
 
-  let prompt = sceneParts.join(", ");
+  const aspectLabel = ASPECT_LABELS[context.aspectRatio] ?? context.aspectRatio;
+  sections.push(`Aspect ratio: ${aspectLabel}`);
 
-  const negativeText = getNegativePrompt(context.platform);
-  if (negativeText) {
-    prompt += ` --neg ${negativeText}`;
-  }
-
-  return prompt;
+  return sections.join("\n\n");
 }

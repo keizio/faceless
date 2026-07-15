@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { avatars, generationJobs } from "../db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { enqueueAvatarGeneration } from "../queues/avatar-generation.js";
 
 export class AvatarService {
   async listAvatars(userId: string) {
@@ -30,8 +31,14 @@ export class AvatarService {
       gender?: string;
       speechStyle?: string;
       referenceImageUrl?: string;
+      customPrompt?: string;
     },
   ) {
+    const metadata: Record<string, unknown> = {};
+    if (data.customPrompt) {
+      metadata.customPrompt = data.customPrompt;
+    }
+
     const [avatar] = await db
       .insert(avatars)
       .values({
@@ -41,6 +48,7 @@ export class AvatarService {
         gender: data.gender ?? null,
         speechStyle: (data.speechStyle ?? null) as any,
         referenceImageUrl: data.referenceImageUrl ?? null,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       })
       .returning();
     return avatar;
@@ -55,13 +63,27 @@ export class AvatarService {
       gender: string;
       speechStyle: string;
       referenceImageUrl: string;
+      customPrompt: string;
     }>,
   ) {
+    const existing = await this.getAvatar(userId, id);
+    const metadata = { ...(existing.metadata ?? {}) } as Record<string, unknown>;
+    if (data.customPrompt !== undefined) {
+      if (data.customPrompt) {
+        metadata.customPrompt = data.customPrompt;
+      } else {
+        delete metadata.customPrompt;
+      }
+    }
+
+    const { customPrompt: _, ...dbData } = data;
+
     const [avatar] = await db
       .update(avatars)
       .set({
-        ...data,
+        ...dbData,
         speechStyle: data.speechStyle as any,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         updatedAt: new Date(),
       })
       .where(and(eq(avatars.id, id), eq(avatars.userId, userId)))
@@ -81,8 +103,10 @@ export class AvatarService {
     return avatar;
   }
 
-  async generateCharacterSheet(userId: string, avatarId: string) {
+  async generateCharacterSheet(userId: string, avatarId: string, customPrompt?: string) {
     const avatar = await this.getAvatar(userId, avatarId);
+
+    const resolvedCustomPrompt = customPrompt || (avatar.metadata as Record<string, unknown> | null)?.customPrompt as string | undefined;
 
     const [job] = await db
       .insert(generationJobs)
@@ -93,6 +117,13 @@ export class AvatarService {
         status: "pending",
       })
       .returning();
+
+    await enqueueAvatarGeneration({
+      jobId: job.id,
+      userId,
+      avatarId,
+      customPrompt: resolvedCustomPrompt,
+    });
 
     return { job, avatar };
   }

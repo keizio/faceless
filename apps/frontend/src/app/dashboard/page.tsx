@@ -18,9 +18,12 @@ import {
   Plus,
   ChevronRight,
 } from "lucide-react";
+import { useTemplates } from "@/hooks/useTemplates";
+import { TemplateCard } from "@/components/templates/TemplateCard";
 
 export default function DashboardPage() {
   const { data: projects, isLoading } = useProjects();
+  const { data: templates } = useTemplates();
   const createProject = useCreateProject();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -121,6 +124,34 @@ export default function DashboardPage() {
             </Card>
           )}
 
+          {/* Templates */}
+          {templates && templates.length > 0 && (
+            <section>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Templates
+                </h2>
+                <Link
+                  href="/templates"
+                  className="text-sm text-primary hover:underline"
+                >
+                  Browse all
+                </Link>
+              </div>
+              <div className="flex gap-4 overflow-x-auto pb-2">
+                {templates.slice(0, 4).map((template) => (
+                  <Link
+                    key={template.id}
+                    href={`/templates/${template.id}`}
+                    className="w-72 shrink-0"
+                  >
+                    <TemplateCard template={template} />
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Projects */}
           <section>
             <div className="mb-4 flex items-center justify-between">
@@ -163,7 +194,13 @@ export default function DashboardPage() {
             ) : (
               <div className="isometric-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {projects?.map(
-                  (project: { id: string; name: string; description: string | null; createdAt: string }) => (
+                  (project: {
+                    id: string;
+                    name: string;
+                    description: string | null;
+                    createdAt: string;
+                    contentThumbnails?: string[];
+                  }) => (
                     <Link
                       key={project.id}
                       href={`/projects/${project.id}`}
@@ -184,6 +221,22 @@ export default function DashboardPage() {
                             <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
                               {project.description}
                             </p>
+                          )}
+                          {project.contentThumbnails && project.contentThumbnails.length > 0 && (
+                            <div className="mt-3 flex gap-1.5">
+                              {project.contentThumbnails.map((url: string, i: number) => (
+                                <div
+                                  key={i}
+                                  className="h-10 w-10 rounded-md overflow-hidden bg-muted shrink-0"
+                                >
+                                  <img
+                                    src={url}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                </div>
+                              ))}
+                            </div>
                           )}
                           <p className="mt-3 text-xs text-muted-foreground/70">
                             {new Date(project.createdAt).toLocaleDateString("en-US", {

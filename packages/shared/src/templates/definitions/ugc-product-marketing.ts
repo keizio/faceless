@@ -1,0 +1,52 @@
+import type { ContentTemplate } from "../types";
+
+export const ugcProductMarketingTemplate: ContentTemplate = {
+  id: "ugc-product-marketing",
+  name: "UGC Product Marketing",
+  description: "Create authentic-looking user-generated content for product promotion. Testimonial, unboxing, and review style content that converts.",
+  category: "marketing",
+  icon: "ShoppingBag",
+  thumbnailDescription: "Product showcase with lifestyle context",
+  supportedContentTypes: ["image", "video", "slide"],
+  supportedPlatforms: ["tiktok", "instagram", "facebook", "generic"],
+  renderMode: "ai",
+  inputFields: [
+    {
+      id: "productName",
+      label: "Product Name",
+      type: "text",
+      required: true,
+      placeholder: "e.g., Glow Serum Pro",
+    },
+    {
+      id: "productDescription",
+      label: "Product Description",
+      type: "textarea",
+      required: true,
+      placeholder: "Describe the product, its purpose, and what makes it special",
+    },
+    {
+      id: "keyFeatures",
+      label: "Key Features",
+      type: "array",
+      required: false,
+      placeholder: "Add key features or benefits",
+    },
+    {
+      id: "tone",
+      label: "Tone",
+      type: "select",
+      required: true,
+      options: [
+        { value: "enthusiastic", label: "Enthusiastic" },
+        { value: "honest", label: "Honest & Authentic" },
+        { value: "casual", label: "Casual & Relatable" },
+        { value: "professional", label: "Professional" },
+      ],
+      defaultValue: "enthusiastic",
+    },
+  ],
+  defaultContentType: "video",
+  defaultPlatform: "tiktok",
+  defaultAspectRatio: "9:16",
+};

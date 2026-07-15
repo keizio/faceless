@@ -11,6 +11,8 @@ import {
 import { generateImageWorkflow } from "./workflows/generate-image-workflow.js";
 import { generateVideoWorkflow } from "./workflows/generate-video-workflow.js";
 import { generateContentWorkflow } from "./workflows/generate-content-workflow.js";
+import { generateAvatarWorkflow } from "./workflows/generate-avatar-workflow.js";
+import { generateMusicVideoWorkflow } from "./workflows/generate-music-video-workflow.js";
 
 export const mastra: Mastra = new Mastra({
   agents: {
@@ -24,5 +26,7 @@ export const mastra: Mastra = new Mastra({
     generateImageWorkflow,
     generateVideoWorkflow,
     generateContentWorkflow,
+    generateAvatarWorkflow,
+    generateMusicVideoWorkflow,
   },
 });

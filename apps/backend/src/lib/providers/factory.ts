@@ -1,8 +1,10 @@
-import type { TextProvider, ImageProvider, VideoProvider, Providers } from "./types.js";
+import type { TextProvider, ImageProvider, VideoProvider, AudioProvider, MusicProvider, Providers } from "./types.js";
 import {
   DashScopeTextProvider,
   DashScopeImageProvider,
   DashScopeVideoProvider,
+  DashScopeAudioProvider,
+  DashScopeMusicProvider,
 } from "./dashscope.js";
 import {
   OpenRouterTextProvider,
@@ -51,11 +53,21 @@ function resolveVideo(name: ProviderName): VideoProvider {
   }
 }
 
+function resolveAudio(_name: ProviderName): AudioProvider {
+  return new DashScopeAudioProvider();
+}
+
+function resolveMusic(_name: ProviderName): MusicProvider {
+  return new DashScopeMusicProvider();
+}
+
 function createProviders(): Providers {
   return {
     text: resolveText(getEnvVar("TEXT")),
     image: resolveImage(getEnvVar("IMAGE")),
     video: resolveVideo(getEnvVar("VIDEO")),
+    audio: resolveAudio(getEnvVar("AUDIO")),
+    music: resolveMusic(getEnvVar("MUSIC")),
   };
 }
 

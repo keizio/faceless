@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useCreateContent } from "@/hooks/useContents";
 import { useAvatars } from "@/hooks/useAvatars";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { useEditorStore } from "@/stores/editor";
 import { PLATFORM_SPECS, LANGUAGES } from "@faceless/shared";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,15 +35,49 @@ const PLATFORMS = [
   { value: "generic", label: "Generic" },
 ] as const;
 
+const ASPECT_RATIO_ICONS: Record<string, React.ReactNode> = {
+  "9:16": (
+    <svg key="9:16" viewBox="0 0 9 16" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="1" width="7" height="14" rx="1" />
+    </svg>
+  ),
+  "1:1": (
+    <svg key="1:1" viewBox="0 0 16 16" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="1" width="14" height="14" rx="1" />
+    </svg>
+  ),
+  "4:5": (
+    <svg key="4:5" viewBox="0 0 8 10" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="1" width="6" height="8" rx="1" />
+    </svg>
+  ),
+  "16:9": (
+    <svg key="16:9" viewBox="0 0 16 9" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="1" width="14" height="7" rx="1" />
+    </svg>
+  ),
+};
+
 export function ContentCreator({ projectId }: { projectId: string }) {
+  const router = useRouter();
   const {
     draftPrompt, selectedType, selectedPlatform, selectedAspectRatio, selectedLanguage, selectedAvatarId,
     setPrompt, setType, setPlatform, setAspectRatio, setLanguage, setAvatarId, reset,
   } = useEditorStore();
   const { data: avatars } = useAvatars();
+  const { data: userProfile } = useUserProfile();
   const createContent = useCreateContent(projectId);
   const [title, setTitle] = useState("");
+  const [slideCount, setSlideCount] = useState(3);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const langInitialized = useRef(false);
+
+  useEffect(() => {
+    if (userProfile?.language && !langInitialized.current) {
+      langInitialized.current = true;
+      setLanguage(userProfile.language);
+    }
+  }, [userProfile?.language, setLanguage]);
 
   const platformSpecs = PLATFORM_SPECS[selectedPlatform as keyof typeof PLATFORM_SPECS];
   const aspectRatios = platformSpecs?.aspectRatios ?? ["16:9"];
@@ -50,18 +86,21 @@ export function ContentCreator({ projectId }: { projectId: string }) {
     if (!draftPrompt || !selectedType) return;
     createContent.mutate(
       {
-        type: selectedType,
+        type: selectedType!,
         platform: selectedPlatform,
         aspectRatio: selectedAspectRatio,
         language: selectedLanguage,
         prompt: draftPrompt,
         title: title || undefined,
         avatarId: selectedAvatarId || undefined,
+        slideCount: selectedType === "slide" ? slideCount : undefined,
       },
       {
-        onSuccess: () => {
-          reset();
+        onSuccess: (result) => {
+          reset(userProfile?.language);
           setTitle("");
+          setSlideCount(3);
+          router.push(`/contents/${result.content.id}`);
         },
       },
     );
@@ -147,8 +186,9 @@ export function ContentCreator({ projectId }: { projectId: string }) {
                     onClick={() => setAspectRatio(ratio)}
                     variant={selectedAspectRatio === ratio ? "default" : "outline"}
                     size="sm"
-                    className="flex-1 text-xs"
+                    className="flex-1 gap-1 text-xs"
                   >
+                    {ASPECT_RATIO_ICONS[ratio]}
                     {ratio}
                   </Button>
                 ))}
@@ -221,6 +261,26 @@ export function ContentCreator({ projectId }: { projectId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+              {selectedType === "slide" && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Number of Slides
+                  </label>
+                  <div className="flex gap-1.5">
+                    {[3, 5, 10].map((n) => (
+                      <Button
+                        key={n}
+                        onClick={() => setSlideCount(n)}
+                        variant={slideCount === n ? "default" : "outline"}
+                        size="sm"
+                        className="flex-1 text-xs"
+                      >
+                        {n}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

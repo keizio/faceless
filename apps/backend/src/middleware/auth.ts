@@ -29,7 +29,7 @@ export async function verifyFirebaseToken(c: Context, next: Next) {
       .limit(1);
 
     if (!existing) {
-      await db.insert(users).values({ id: userId, email });
+      await db.insert(users).values({ id: userId, email, language: "en" });
     }
 
     await next();

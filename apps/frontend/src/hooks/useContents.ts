@@ -3,6 +3,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
+export function useAllContents() {
+  return useQuery({
+    queryKey: ["contents"],
+    queryFn: async () => {
+      const { data } = await api.get("/api/contents");
+      return data.contents;
+    },
+  });
+}
+
 export function useContent(id: string) {
   return useQuery({
     queryKey: ["contents", id],
@@ -25,6 +35,9 @@ export function useCreateContent(projectId: string) {
       prompt: string;
       title?: string;
       avatarId?: string;
+      slideCount?: number;
+      templateId?: string;
+      templateInputs?: Record<string, unknown>;
     }) => {
       const { data } = await api.post(
         `/api/projects/${projectId}/contents`,
@@ -34,6 +47,7 @@ export function useCreateContent(projectId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
   });
 }
@@ -47,6 +61,19 @@ export function useRegenerateContent() {
     },
     onSuccess: (_, contentId) => {
       queryClient.invalidateQueries({ queryKey: ["contents", contentId] });
+    },
+  });
+}
+
+export function useDeleteContent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (contentId: string) => {
+      const { data } = await api.delete(`/api/contents/${contentId}`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
   });
 }

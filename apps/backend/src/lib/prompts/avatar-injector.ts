@@ -42,7 +42,7 @@ export function renderAvatarForVisual(avatar: AvatarContext): string {
     if (avatar.age) {
       parts.push(`${avatar.age}-year-old`);
     }
-    parts.push(`character named ${avatar.name}`);
+    parts.push(`character named ${avatar.name}`, "realistic face with visible facial features");
   }
 
   parts.push("consistent appearance across all scenes");
@@ -50,14 +50,14 @@ export function renderAvatarForVisual(avatar: AvatarContext): string {
   const style = avatar.speechStyle;
   if (style) {
     const styleDescriptors: Record<string, string> = {
-      formal: "professional attire, composed posture",
-      casual: "relaxed casual clothing, natural demeanor",
-      humorous: "expressive, playful energy",
-      professional: "business attire, confident stance",
-      friendly: "warm smile, approachable presence",
-      persuasive: "confident body language, engaging eye contact",
-      inspirational: "motivated expression, dynamic presence",
-      educational: "knowledgeable demeanor, clear communication style",
+      formal: "professional attire, neutral expression, composed posture",
+      casual: "relaxed casual clothing, relaxed expression, natural demeanor",
+      humorous: "playful grin, expressive face, lively energy",
+      professional: "business attire, confident expression, direct gaze",
+      friendly: "warm smile, friendly eyes, approachable presence",
+      persuasive: "engaging eye contact, sincere expression, confident body language",
+      inspirational: "motivated expression, bright eyes, dynamic presence",
+      educational: "attentive expression, patient demeanor, clear communication style",
     };
     if (styleDescriptors[style]) {
       parts.push(styleDescriptors[style]);

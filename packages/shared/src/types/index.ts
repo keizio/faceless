@@ -22,6 +22,7 @@ export interface User {
   email: string;
   name: string | null;
   plan: string;
+  language: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +67,8 @@ export interface Content {
   title: string | null;
   prompt: string;
   script: string | null;
+  templateId: string | null;
+  templateInputs: Record<string, unknown> | null;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -107,6 +110,8 @@ export interface CreateContentRequest {
   prompt: string;
   title?: string;
   avatarId?: string;
+  templateId?: string;
+  templateInputs?: Record<string, unknown>;
 }
 
 export interface CreateProjectRequest {
