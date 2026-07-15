@@ -11,6 +11,21 @@ import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
+import {
+  renderChatTemplate,
+  renderFactCardTemplate,
+  renderQuoteCardTemplate,
+  renderSplitScreenTemplate,
+} from "../../lib/compositing/renderer.js";
+import { uploadFile } from "../../lib/storage.js";
+
+async function downloadImageAsBuffer(url: string): Promise<Buffer> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download image from ${url}: ${response.status}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
 
 const imageInputSchema = z.object({
   contentId: z.string(),
@@ -25,6 +40,8 @@ const imageInputSchema = z.object({
   templateNegativeAdditions: z.array(z.string()).optional(),
   templateScriptStructure: z.string().optional(),
   templateNarrationGuidance: z.string().optional(),
+  templateId: z.string().optional(),
+  templateInputs: z.record(z.unknown()).optional(),
 });
 
 const enhanceImagePromptStep = createStep({
@@ -43,6 +60,8 @@ const enhanceImagePromptStep = createStep({
     promptMetadata: z.any(),
     templateVisualGuidance: z.string().optional(),
     templateNegativeAdditions: z.array(z.string()).optional(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
   }),
   execute: async ({ inputData }) => {
     const context = await buildPromptContext(
@@ -130,6 +149,8 @@ Output format: JSON with {
       },
       templateVisualGuidance: inputData.templateVisualGuidance,
       templateNegativeAdditions: inputData.templateNegativeAdditions,
+      templateId: inputData.templateId,
+      templateInputs: inputData.templateInputs,
     };
   },
 });
@@ -151,6 +172,8 @@ const generateImageScriptStep = createStep({
     templateVisualGuidance: z.string().optional(),
     templateNegativeAdditions: z.array(z.string()).optional(),
     templateScriptStructure: z.string().optional(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -160,6 +183,8 @@ const generateImageScriptStep = createStep({
     promptMetadata: z.any(),
     script: z.string(),
     caption: z.string(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
   }),
   execute: async ({ inputData }) => {
     const textProvider = getProviders().text;
@@ -230,13 +255,15 @@ CRITICAL: Never include fake social media statistics, follower counts, like coun
       promptMetadata: inputData.promptMetadata,
       script,
       caption,
+      templateId: inputData.templateId,
+      templateInputs: inputData.templateInputs,
     };
   },
 });
 
 const generateImageStep = createStep({
   id: "generate-image",
-  description: "Generate a single AI image from enhanced prompt",
+  description: "Generate AI image(s) from enhanced prompt — supports split-screen (2 images) and fake-chat (0 images)",
   inputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
@@ -245,38 +272,201 @@ const generateImageStep = createStep({
     promptMetadata: z.any(),
     script: z.string(),
     caption: z.string(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
-    imageUrl: z.string(),
+    imageUrls: z.array(z.string()),
     script: z.string(),
     caption: z.string(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
+    aspectRatio: z.string(),
   }),
   execute: async ({ inputData }) => {
     const size = getImageSize(inputData.aspectRatio);
     const platform = inputData.promptMetadata?.context?.platform as Platform | undefined;
     const negativePrompt = platform ? getNegativePrompt(platform) : "";
     const qualityTags = (inputData.promptMetadata?.enhanced as EnhancedPrompt | undefined)?.qualityTags;
-    const imageUrl = await getProviders().image.generate(inputData.enhancedPrompt, size, undefined, { negativePrompt, qualityTags });
 
-    await db.insert(mediaAssets).values({
-      userId: inputData.userId,
-      contentId: inputData.contentId,
-      type: "image",
-      url: imageUrl,
-      provider: process.env.AI_IMAGE_PROVIDER ?? "dashscope",
-      metadata: {
-        prompt: inputData.enhancedPrompt,
-        size,
-        ...inputData.promptMetadata,
-      },
-    });
+    const templateId = inputData.templateId;
+
+    if (templateId === "fake-chat") {
+      await db
+        .update(contents)
+        .set({
+          metadata: {
+            templateId: "fake-chat",
+            hasAvatar: !!inputData.userId,
+            platform,
+          },
+        })
+        .where(eq(contents.id, inputData.contentId));
+
+      return {
+        contentId: inputData.contentId,
+        userId: inputData.userId,
+        imageUrls: [],
+        script: inputData.script,
+        caption: inputData.caption,
+        templateId: inputData.templateId,
+        templateInputs: inputData.templateInputs,
+        aspectRatio: inputData.aspectRatio,
+      };
+    }
+
+    const imageUrls: string[] = [];
+
+    if (templateId === "split-screen" && inputData.templateInputs) {
+      const leftDescription = (inputData.templateInputs.leftDescription as string) ?? inputData.enhancedPrompt;
+      const rightDescription = (inputData.templateInputs.rightDescription as string) ?? inputData.enhancedPrompt;
+
+      const leftUrl = await getProviders().image.generate(leftDescription, size, undefined, { negativePrompt, qualityTags });
+      await db.insert(mediaAssets).values({
+        userId: inputData.userId,
+        contentId: inputData.contentId,
+        type: "image",
+        url: leftUrl,
+        provider: process.env.AI_IMAGE_PROVIDER ?? "dashscope",
+        metadata: { panel: "left", prompt: leftDescription, size, ...inputData.promptMetadata },
+      });
+      imageUrls.push(leftUrl);
+
+      const rightUrl = await getProviders().image.generate(rightDescription, size, undefined, { negativePrompt, qualityTags });
+      await db.insert(mediaAssets).values({
+        userId: inputData.userId,
+        contentId: inputData.contentId,
+        type: "image",
+        url: rightUrl,
+        provider: process.env.AI_IMAGE_PROVIDER ?? "dashscope",
+        metadata: { panel: "right", prompt: rightDescription, size, ...inputData.promptMetadata },
+      });
+      imageUrls.push(rightUrl);
+    } else {
+      const imageUrl = await getProviders().image.generate(inputData.enhancedPrompt, size, undefined, { negativePrompt, qualityTags });
+
+      await db.insert(mediaAssets).values({
+        userId: inputData.userId,
+        contentId: inputData.contentId,
+        type: "image",
+        url: imageUrl,
+        provider: process.env.AI_IMAGE_PROVIDER ?? "dashscope",
+        metadata: {
+          prompt: inputData.enhancedPrompt,
+          size,
+          ...inputData.promptMetadata,
+        },
+      });
+
+      imageUrls.push(imageUrl);
+    }
 
     return {
       contentId: inputData.contentId,
       userId: inputData.userId,
-      imageUrl,
+      imageUrls,
+      script: inputData.script,
+      caption: inputData.caption,
+      templateId: inputData.templateId,
+      templateInputs: inputData.templateInputs,
+      aspectRatio: inputData.aspectRatio,
+    };
+  },
+});
+
+const compositeImageStep = createStep({
+  id: "composite-image",
+  description: "Composite template overlays onto generated images (chat UI, split-screen, fact/quote cards)",
+  inputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    imageUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
+    aspectRatio: z.string(),
+  }),
+  outputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    compositedImageUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+  }),
+  execute: async ({ inputData }) => {
+    const { templateId, templateInputs, imageUrls, aspectRatio } = inputData;
+
+    if (!templateId || !templateInputs) {
+      return {
+        contentId: inputData.contentId,
+        userId: inputData.userId,
+        compositedImageUrls: imageUrls,
+        script: inputData.script,
+        caption: inputData.caption,
+      };
+    }
+
+    const compositedUrls: string[] = [];
+
+    switch (templateId) {
+      case "fake-chat": {
+        const buffer = await renderChatTemplate(templateInputs, aspectRatio);
+        const url = await uploadFile(buffer, "chat-composite.png", "image/png");
+        compositedUrls.push(url);
+        break;
+      }
+
+      case "fact-card": {
+        let bgBuffer: Buffer | undefined;
+        if (imageUrls.length > 0) {
+          bgBuffer = await downloadImageAsBuffer(imageUrls[0]);
+        }
+        const buffer = await renderFactCardTemplate(templateInputs, aspectRatio, bgBuffer);
+        const url = await uploadFile(buffer, "fact-card-composite.png", "image/png");
+        compositedUrls.push(url);
+        break;
+      }
+
+      case "quote-card": {
+        let bgBuffer: Buffer | undefined;
+        if (imageUrls.length > 0) {
+          bgBuffer = await downloadImageAsBuffer(imageUrls[0]);
+        }
+        const buffer = await renderQuoteCardTemplate(templateInputs, aspectRatio, bgBuffer);
+        const url = await uploadFile(buffer, "quote-card-composite.png", "image/png");
+        compositedUrls.push(url);
+        break;
+      }
+
+      case "split-screen": {
+        if (imageUrls.length < 2) {
+          throw new Error("Split screen template requires 2 generated images");
+        }
+        const leftBuffer = await downloadImageAsBuffer(imageUrls[0]);
+        const rightBuffer = await downloadImageAsBuffer(imageUrls[1]);
+        const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
+        const url = await uploadFile(buffer, "split-screen-composite.png", "image/png");
+        compositedUrls.push(url);
+        break;
+      }
+
+      default:
+        return {
+          contentId: inputData.contentId,
+          userId: inputData.userId,
+          compositedImageUrls: imageUrls,
+          script: inputData.script,
+          caption: inputData.caption,
+        };
+    }
+
+    return {
+      contentId: inputData.contentId,
+      userId: inputData.userId,
+      compositedImageUrls: compositedUrls,
       script: inputData.script,
       caption: inputData.caption,
     };
@@ -289,7 +479,7 @@ const saveImageVersionStep = createStep({
   inputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
-    imageUrl: z.string(),
+    compositedImageUrls: z.array(z.string()),
     script: z.string(),
     caption: z.string(),
   }),
@@ -306,18 +496,20 @@ const saveImageVersionStep = createStep({
     });
 
     const versionNumber = existingVersions.length + 1;
+    const outputUrl = inputData.compositedImageUrls[0] ?? null;
 
     const [version] = await db
       .insert(contentVersions)
       .values({
         contentId: inputData.contentId,
         versionNumber,
-        outputUrl: inputData.imageUrl,
-        thumbnailUrl: inputData.imageUrl,
+        outputUrl,
+        thumbnailUrl: outputUrl,
         metadata: {
           type: "image",
           caption: inputData.caption,
           script: inputData.script,
+          ...(inputData.compositedImageUrls.length > 0 ? { images: inputData.compositedImageUrls } : {}),
         },
       })
       .returning();
@@ -330,7 +522,7 @@ const saveImageVersionStep = createStep({
     return {
       contentId: inputData.contentId,
       versionId: version.id,
-      imageUrl: inputData.imageUrl,
+      imageUrl: outputUrl ?? "",
       script: inputData.script,
       caption: inputData.caption,
     };
@@ -351,6 +543,7 @@ export const generateImageWorkflow = createWorkflow({
   .then(enhanceImagePromptStep)
   .then(generateImageScriptStep)
   .then(generateImageStep)
+  .then(compositeImageStep)
   .then(saveImageVersionStep);
 
 generateImageWorkflow.commit();

@@ -158,6 +158,11 @@ export class ContentService {
       })
       .returning();
 
+    const slideCount =
+      content.templateId === "listicle"
+        ? ((content.templateInputs as Record<string, unknown> | null)?.itemCount as number) ?? undefined
+        : undefined;
+
     await enqueueContentGeneration({
       jobId: job.id,
       contentId,
@@ -168,6 +173,7 @@ export class ContentService {
       language: content.language,
       prompt: content.prompt,
       avatarId: content.avatarId ?? undefined,
+      slideCount,
       templateId: content.templateId ?? undefined,
       templateInputs: content.templateInputs ?? undefined,
     });
@@ -200,6 +206,11 @@ export class ContentService {
 
     if (!content) throw new Error("Content not found");
 
+    const slideCount =
+      content.templateId === "listicle"
+        ? ((content.templateInputs as Record<string, unknown> | null)?.itemCount as number) ?? undefined
+        : undefined;
+
     return this.createContent(userId, content.projectId, {
       type: content.type,
       platform: content.platform,
@@ -208,6 +219,7 @@ export class ContentService {
       prompt: content.prompt,
       title: content.title ? `${content.title} (${newLanguage})` : undefined,
       avatarId: content.avatarId ?? undefined,
+      slideCount,
       templateId: content.templateId ?? undefined,
       templateInputs: content.templateInputs ?? undefined,
     });

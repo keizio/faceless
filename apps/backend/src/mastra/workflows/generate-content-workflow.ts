@@ -11,6 +11,20 @@ import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
+import {
+  renderFactCardTemplate,
+  renderQuoteCardTemplate,
+  renderListicleCardTemplate,
+} from "../../lib/compositing/renderer.js";
+import { uploadFile } from "../../lib/storage.js";
+
+async function downloadImageAsBuffer(url: string): Promise<Buffer> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download image from ${url}: ${response.status}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
 
 const contentInputSchema = z.object({
   contentId: z.string(),
@@ -27,6 +41,8 @@ const contentInputSchema = z.object({
   templateNegativeAdditions: z.array(z.string()).optional(),
   templateScriptStructure: z.string().optional(),
   templateNarrationGuidance: z.string().optional(),
+  templateId: z.string().optional(),
+  templateInputs: z.record(z.unknown()).optional(),
 });
 
 const buildPromptContextStep = createStep({
@@ -49,6 +65,8 @@ const buildPromptContextStep = createStep({
     templateNegativeAdditions: z.array(z.string()).optional(),
     templateScriptStructure: z.string().optional(),
     templateNarrationGuidance: z.string().optional(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
   }),
   execute: async ({ inputData }) => {
     const context = await buildPromptContext(
@@ -85,6 +103,8 @@ const buildPromptContextStep = createStep({
       templateNegativeAdditions: inputData.templateNegativeAdditions,
       templateScriptStructure: inputData.templateScriptStructure,
       templateNarrationGuidance: inputData.templateNarrationGuidance,
+      templateId: inputData.templateId,
+      templateInputs: inputData.templateInputs,
     };
   },
 });
@@ -108,6 +128,8 @@ const generateScriptStep = createStep({
     templateNegativeAdditions: z.array(z.string()).optional(),
     templateScriptStructure: z.string().optional(),
     templateNarrationGuidance: z.string().optional(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -120,6 +142,8 @@ const generateScriptStep = createStep({
     enhancedPrompt: z.string().optional(),
     slideCount: z.number().optional(),
     aspectRatio: z.string(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
   }),
   execute: async ({ inputData }) => {
     const textProvider = getProviders().text;
@@ -187,6 +211,8 @@ CRITICAL: Never include fake social media statistics, follower counts, like coun
       enhancedPrompt,
       slideCount: inputData.slideCount,
       aspectRatio: inputData.aspectRatio,
+      templateId: inputData.templateId,
+      templateInputs: inputData.templateInputs,
     };
   },
 });
@@ -205,6 +231,8 @@ const generateSlideImagesStep = createStep({
     enhancedPrompt: z.string().optional(),
     slideCount: z.number().optional(),
     aspectRatio: z.string(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -213,6 +241,9 @@ const generateSlideImagesStep = createStep({
     caption: z.string(),
     imageUrls: z.array(z.string()),
     contentType: z.enum(["image", "slide", "video", "text"]),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
+    aspectRatio: z.string(),
   }),
   execute: async ({ inputData }) => {
     if (inputData.contentType !== "slide") {
@@ -223,10 +254,16 @@ const generateSlideImagesStep = createStep({
         caption: inputData.caption,
         imageUrls: [],
         contentType: inputData.contentType,
+        templateId: inputData.templateId,
+        templateInputs: inputData.templateInputs,
+        aspectRatio: inputData.aspectRatio,
       };
     }
 
-    const slideCount = inputData.slideCount ?? 3;
+    const slideCount =
+      inputData.templateId === "listicle"
+        ? (inputData.templateInputs?.itemCount as number) ?? inputData.slideCount ?? 5
+        : inputData.slideCount ?? 3;
     const size = getImageSize(inputData.aspectRatio);
     const imageUrls: string[] = [];
 
@@ -262,6 +299,116 @@ const generateSlideImagesStep = createStep({
       caption: inputData.caption,
       imageUrls,
       contentType: inputData.contentType,
+      templateId: inputData.templateId,
+      templateInputs: inputData.templateInputs,
+      aspectRatio: inputData.aspectRatio,
+    };
+  },
+});
+
+const compositeSlideStep = createStep({
+  id: "composite-slide",
+  description: "Composite template overlays onto slide images (listicle, fact-card, quote-card)",
+  inputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    script: z.string(),
+    caption: z.string(),
+    imageUrls: z.array(z.string()),
+    contentType: z.enum(["image", "slide", "video", "text"]),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
+    aspectRatio: z.string(),
+  }),
+  outputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    compositedImageUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    contentType: z.enum(["image", "slide", "video", "text"]),
+  }),
+  execute: async ({ inputData }) => {
+    const { templateId, templateInputs, imageUrls, aspectRatio } = inputData;
+
+    if (!templateId || !templateInputs || imageUrls.length === 0) {
+      return {
+        contentId: inputData.contentId,
+        userId: inputData.userId,
+        compositedImageUrls: imageUrls,
+        script: inputData.script,
+        caption: inputData.caption,
+        contentType: inputData.contentType,
+      };
+    }
+
+    const compositedUrls: string[] = [];
+
+    switch (templateId) {
+      case "listicle": {
+        const items = (templateInputs.items as string[]) ?? [];
+        const itemCount = (templateInputs.itemCount as number) ?? items.length ?? imageUrls.length;
+        const topic = (templateInputs.topic as string) ?? "";
+
+        for (let i = 0; i < itemCount; i++) {
+          const itemTitle = items[i] ?? `Item ${i + 1}`;
+          const itemDescription = `Description for ${itemTitle}`;
+          const bgBuffer = imageUrls[i]
+            ? await downloadImageAsBuffer(imageUrls[i])
+            : undefined;
+          const buffer = await renderListicleCardTemplate(
+            templateInputs,
+            aspectRatio,
+            i + 1,
+            itemTitle,
+            itemDescription,
+            itemCount,
+            bgBuffer,
+          );
+          const url = await uploadFile(buffer, `listicle-card-${i + 1}.png`, "image/png");
+          compositedUrls.push(url);
+        }
+        break;
+      }
+
+      case "fact-card": {
+        for (let i = 0; i < imageUrls.length; i++) {
+          const bgBuffer = await downloadImageAsBuffer(imageUrls[i]);
+          const buffer = await renderFactCardTemplate(templateInputs, aspectRatio, bgBuffer);
+          const url = await uploadFile(buffer, `fact-card-${i + 1}.png`, "image/png");
+          compositedUrls.push(url);
+        }
+        break;
+      }
+
+      case "quote-card": {
+        for (let i = 0; i < imageUrls.length; i++) {
+          const bgBuffer = await downloadImageAsBuffer(imageUrls[i]);
+          const buffer = await renderQuoteCardTemplate(templateInputs, aspectRatio, bgBuffer);
+          const url = await uploadFile(buffer, `quote-card-${i + 1}.png`, "image/png");
+          compositedUrls.push(url);
+        }
+        break;
+      }
+
+      default:
+        return {
+          contentId: inputData.contentId,
+          userId: inputData.userId,
+          compositedImageUrls: imageUrls,
+          script: inputData.script,
+          caption: inputData.caption,
+          contentType: inputData.contentType,
+        };
+    }
+
+    return {
+      contentId: inputData.contentId,
+      userId: inputData.userId,
+      compositedImageUrls: compositedUrls,
+      script: inputData.script,
+      caption: inputData.caption,
+      contentType: inputData.contentType,
     };
   },
 });
@@ -274,7 +421,7 @@ const saveSlideVersionStep = createStep({
     userId: z.string(),
     script: z.string(),
     caption: z.string(),
-    imageUrls: z.array(z.string()),
+    compositedImageUrls: z.array(z.string()),
     contentType: z.enum(["image", "slide", "video", "text"]),
   }),
   outputSchema: z.object({
@@ -290,20 +437,18 @@ const saveSlideVersionStep = createStep({
 
     const versionNumber = existingVersions.length + 1;
 
-    const isText = inputData.contentType === "text";
-
     const [version] = await db
       .insert(contentVersions)
       .values({
         contentId: inputData.contentId,
         versionNumber,
-        outputUrl: inputData.imageUrls[0] ?? null,
-        thumbnailUrl: inputData.imageUrls[0] ?? null,
+        outputUrl: inputData.compositedImageUrls[0] ?? null,
+        thumbnailUrl: inputData.compositedImageUrls[0] ?? null,
         metadata: {
           type: inputData.contentType,
           script: inputData.script,
           caption: inputData.caption,
-          ...(inputData.imageUrls.length > 0 ? { images: inputData.imageUrls } : {}),
+          ...(inputData.compositedImageUrls.length > 0 ? { images: inputData.compositedImageUrls } : {}),
         },
       })
       .returning();
@@ -335,6 +480,7 @@ export const generateContentWorkflow = createWorkflow({
   .then(buildPromptContextStep)
   .then(generateScriptStep)
   .then(generateSlideImagesStep)
+  .then(compositeSlideStep)
   .then(saveSlideVersionStep);
 
 generateContentWorkflow.commit();

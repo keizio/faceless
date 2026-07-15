@@ -15,6 +15,20 @@ import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
+import {
+  renderChatTemplate,
+  renderSplitScreenTemplate,
+  renderListicleCardTemplate,
+} from "../../lib/compositing/renderer.js";
+import { uploadFile } from "../../lib/storage.js";
+
+async function downloadImageAsBuffer(url: string): Promise<Buffer> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download image from ${url}: ${response.status}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
 
 const videoInputSchema = z.object({
   contentId: z.string(),
@@ -31,6 +45,7 @@ const videoInputSchema = z.object({
   templateScriptStructure: z.string().optional(),
   templateNarrationGuidance: z.string().optional(),
   templateInputs: z.record(z.unknown()).optional(),
+  templateId: z.string().optional(),
 });
 
 const enhanceVideoPromptStep = createStep({
@@ -53,6 +68,8 @@ const enhanceVideoPromptStep = createStep({
     templateNegativeAdditions: z.array(z.string()).optional(),
     templateScriptStructure: z.string().optional(),
     templateNarrationGuidance: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
+    templateId: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
     const context = await buildPromptContext(
@@ -139,6 +156,8 @@ Output format: JSON with {
       templateNegativeAdditions: inputData.templateNegativeAdditions,
       templateScriptStructure: inputData.templateScriptStructure,
       templateNarrationGuidance: inputData.templateNarrationGuidance,
+      templateInputs: inputData.templateInputs,
+      templateId: inputData.templateId,
     };
   },
 });
@@ -162,6 +181,8 @@ const generateVideoScriptStep = createStep({
     templateNegativeAdditions: z.array(z.string()).optional(),
     templateScriptStructure: z.string().optional(),
     templateNarrationGuidance: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
+    templateId: z.string().optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -177,6 +198,8 @@ const generateVideoScriptStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    templateInputs: z.record(z.unknown()).optional(),
+    templateId: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
     const textProvider = getProviders().text;
@@ -257,6 +280,8 @@ CRITICAL: Never include fake social media statistics, follower counts, like coun
       script,
       caption,
       narrationText,
+      templateInputs: inputData.templateInputs,
+      templateId: inputData.templateId,
     };
   },
 });
@@ -278,6 +303,8 @@ const generateVideoImagesStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    templateInputs: z.record(z.unknown()).optional(),
+    templateId: z.string().optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -295,6 +322,9 @@ const generateVideoImagesStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    templateInputs: z.record(z.unknown()).optional(),
+    templateId: z.string().optional(),
+    aspectRatio: z.string(),
   }),
   execute: async ({ inputData }) => {
     const size = getImageSize(inputData.aspectRatio);
@@ -368,6 +398,154 @@ const generateVideoImagesStep = createStep({
       userId: inputData.userId,
       prompt: inputData.prompt,
       scenes,
+      enhancedPrompt: inputData.enhancedPrompt,
+      promptContext: inputData.promptContext,
+      script: inputData.script,
+      caption: inputData.caption,
+      narrationText: inputData.narrationText,
+      templateInputs: inputData.templateInputs,
+      templateId: inputData.templateId,
+      aspectRatio: inputData.aspectRatio,
+    };
+  },
+});
+
+const compositeVideoSceneStep = createStep({
+  id: "composite-video-scene",
+  description: "Composite template overlays onto video scene images",
+  inputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    prompt: z.string(),
+    scenes: z.array(
+      z.object({
+        url: z.string(),
+        description: z.string(),
+        scenePrompt: z.string(),
+      }),
+    ),
+    enhancedPrompt: z.any(),
+    promptContext: z.any(),
+    script: z.string(),
+    caption: z.string(),
+    narrationText: z.string(),
+    templateInputs: z.record(z.unknown()).optional(),
+    templateId: z.string().optional(),
+    aspectRatio: z.string(),
+  }),
+  outputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    prompt: z.string(),
+    scenes: z.array(
+      z.object({
+        url: z.string(),
+        description: z.string(),
+        scenePrompt: z.string(),
+      }),
+    ),
+    enhancedPrompt: z.any(),
+    promptContext: z.any(),
+    script: z.string(),
+    caption: z.string(),
+    narrationText: z.string(),
+  }),
+  execute: async ({ inputData }) => {
+    const { templateId, templateInputs, scenes, aspectRatio } = inputData;
+
+    if (!templateId || !templateInputs || scenes.length === 0) {
+      return {
+        contentId: inputData.contentId,
+        userId: inputData.userId,
+        prompt: inputData.prompt,
+        scenes,
+        enhancedPrompt: inputData.enhancedPrompt,
+        promptContext: inputData.promptContext,
+        script: inputData.script,
+        caption: inputData.caption,
+        narrationText: inputData.narrationText,
+      };
+    }
+
+    let compositedScenes: { url: string; description: string; scenePrompt: string }[];
+
+    switch (templateId) {
+      case "fake-chat": {
+        const buffer = await renderChatTemplate(templateInputs, aspectRatio);
+        const url = await uploadFile(buffer, "chat-composite.png", "image/png");
+        compositedScenes = scenes.map((s) => ({
+          ...s,
+          url,
+        }));
+        break;
+      }
+
+      case "split-screen": {
+        if (scenes.length < 2) {
+          const buffer = await renderChatTemplate(templateInputs, aspectRatio);
+          const url = await uploadFile(buffer, "split-placeholder.png", "image/png");
+          compositedScenes = scenes.map((s) => ({ ...s, url }));
+        } else {
+          const leftBuffer = await downloadImageAsBuffer(scenes[0].url);
+          const rightBuffer = await downloadImageAsBuffer(scenes[1].url);
+          const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
+          const url = await uploadFile(buffer, "split-screen-composite.png", "image/png");
+          compositedScenes = scenes.map((s) => ({
+            ...s,
+            url,
+          }));
+        }
+        break;
+      }
+
+      case "listicle": {
+        const items = (templateInputs.items as string[]) ?? [];
+        const itemCount = (templateInputs.itemCount as number) ?? items.length ?? scenes.length;
+        const topic = (templateInputs.topic as string) ?? "";
+        compositedScenes = [];
+
+        for (let i = 0; i < scenes.length; i++) {
+          const itemTitle = items[i] ?? `Item ${i + 1}`;
+          const itemDescription = `Description for ${itemTitle}`;
+          const bgBuffer = await downloadImageAsBuffer(scenes[i].url);
+          const buffer = await renderListicleCardTemplate(
+            templateInputs,
+            aspectRatio,
+            i + 1,
+            itemTitle,
+            itemDescription,
+            itemCount,
+            bgBuffer,
+          );
+          const url = await uploadFile(buffer, `listicle-scene-${i + 1}.png`, "image/png");
+          compositedScenes.push({
+            url,
+            description: scenes[i].description,
+            scenePrompt: scenes[i].scenePrompt,
+          });
+        }
+        break;
+      }
+
+      default:
+        return {
+          contentId: inputData.contentId,
+          userId: inputData.userId,
+          prompt: inputData.prompt,
+          scenes,
+          enhancedPrompt: inputData.enhancedPrompt,
+          promptContext: inputData.promptContext,
+          script: inputData.script,
+          caption: inputData.caption,
+          narrationText: inputData.narrationText,
+        };
+    }
+
+    return {
+      contentId: inputData.contentId,
+      userId: inputData.userId,
+      prompt: inputData.prompt,
+      scenes: compositedScenes,
       enhancedPrompt: inputData.enhancedPrompt,
       promptContext: inputData.promptContext,
       script: inputData.script,
@@ -578,6 +756,7 @@ export const generateVideoWorkflow = createWorkflow({
   .then(enhanceVideoPromptStep)
   .then(generateVideoScriptStep)
   .then(generateVideoImagesStep)
+  .then(compositeVideoSceneStep)
   .then(generateVideoClipsStep)
   .then(generateVoiceoverStep)
   .then(saveVideoVersionStep);

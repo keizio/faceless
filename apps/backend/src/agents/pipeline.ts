@@ -75,6 +75,8 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
               aspectRatio,
               language,
               avatarId,
+              templateId: payload.templateId,
+              templateInputs: payload.templateInputs,
               ...templateOverrides,
             },
           }),
@@ -107,6 +109,13 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
             WORKFLOW_TIMEOUT,
           );
         } else {
+          let sceneCount = 3;
+          if (payload.templateId === "listicle") {
+            sceneCount = (payload.templateInputs?.itemCount as number) ?? 5;
+          } else if (payload.templateId && ["fake-chat", "split-screen", "ugc-product-marketing"].includes(payload.templateId)) {
+            sceneCount = 1;
+          }
+
           const workflow = mastra.getWorkflow("generateVideoWorkflow");
           const run = await workflow.createRunAsync();
           result = await withTimeout(
@@ -117,9 +126,11 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
                 prompt: prompt ?? "",
                 platform: platform ?? "generic",
                 aspectRatio,
-                sceneCount: 3,
+                sceneCount,
                 language,
                 avatarId,
+                templateId: payload.templateId,
+                templateInputs: payload.templateInputs,
                 ...templateOverrides,
               },
             }),
@@ -129,9 +140,12 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
         break;
       }
 
-      case "slide":
-      case "text":
-      default: {
+      case "slide": {
+        let slideCount = payload.slideCount ?? 3;
+        if (payload.templateId === "listicle") {
+          slideCount = (payload.templateInputs?.itemCount as number) ?? 5;
+        }
+
         const workflow = mastra.getWorkflow("generateContentWorkflow");
         const run = await workflow.createRunAsync();
         result = await withTimeout(
@@ -139,17 +153,39 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
             inputData: {
               contentId,
               userId,
-              contentType: (contentType ?? "text") as
-                | "image"
-                | "slide"
-                | "video"
-                | "text",
+              contentType: "slide" as const,
               platform: platform ?? "generic",
               prompt: prompt ?? "",
               language,
               avatarId,
               aspectRatio,
-              slideCount: payload.slideCount ?? 3,
+              slideCount,
+              templateId: payload.templateId,
+              templateInputs: payload.templateInputs,
+              ...templateOverrides,
+            },
+          }),
+          WORKFLOW_TIMEOUT,
+        );
+        break;
+      }
+
+      case "text": {
+        const workflow = mastra.getWorkflow("generateContentWorkflow");
+        const run = await workflow.createRunAsync();
+        result = await withTimeout(
+          run.start({
+            inputData: {
+              contentId,
+              userId,
+              contentType: "text" as const,
+              platform: platform ?? "generic",
+              prompt: prompt ?? "",
+              language,
+              avatarId,
+              aspectRatio,
+              templateId: payload.templateId,
+              templateInputs: payload.templateInputs,
               ...templateOverrides,
             },
           }),
