@@ -9,6 +9,7 @@ import { jobRoutes } from "./routes/jobs";
 import { notificationRoutes } from "./routes/notifications";
 import { settingsRoutes } from "./routes/settings";
 import { templateRoutes } from "./routes/templates";
+import { ideasRoutes } from "./routes/ideas";
 import { uploadRoutes } from "./routes/upload";
 import { errorHandler } from "./middleware/error-handler";
 
@@ -34,6 +35,7 @@ app.route("/api/jobs", jobRoutes);
 app.route("/api/notifications", notificationRoutes);
 app.route("/api/settings", settingsRoutes);
 app.route("/api/templates", templateRoutes);
+app.route("/api/ideas", ideasRoutes);
 app.route("/api/upload", uploadRoutes);
 app.route("/api/upload", uploadRoutes);
 

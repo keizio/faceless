@@ -25,6 +25,7 @@ import {
   FileText,
   Settings,
   LayoutTemplate,
+  Lightbulb,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -33,6 +34,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/ideas", label: "Ideas", icon: Lightbulb },
   { href: "/projects", label: "Projects", icon: Folder },
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/avatars", label: "Avatars", icon: User },
@@ -41,6 +43,7 @@ const NAV_ITEMS = [
 
 const ROUTE_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
+  ideas: "Ideas",
   projects: "Projects",
   templates: "Templates",
   avatars: "Avatars",

@@ -157,3 +157,16 @@ export interface CreateAvatarRequest {
   speechStyle?: SpeechStyle;
   referenceImageUrl?: string;
 }
+
+export interface Idea {
+  id: string;
+  language: string;
+  date: string;
+  topic: string;
+  description: string | null;
+  hashtags: string[];
+  contentType: ContentType | null;
+  platform: Platform | null;
+  sourceUrl: string | null;
+  createdAt: string;
+}

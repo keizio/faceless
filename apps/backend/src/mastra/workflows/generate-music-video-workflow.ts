@@ -9,6 +9,7 @@ import {
 import { getNegativePrompt } from "../../lib/prompts/negative-prompts.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
+import { insertMediaAsset } from "../../lib/media.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
@@ -62,7 +63,7 @@ const generateOrUseAudioStep = createStep({
       audioDurationMs = result.durationMs;
     }
 
-    await db.insert(mediaAssets).values({
+    await insertMediaAsset({
       userId: inputData.userId,
       contentId: inputData.contentId,
       type: "audio",
@@ -280,7 +281,7 @@ const generateMusicImagesStep = createStep({
       const negativePrompt = getNegativePrompt(contextData.platform as Platform);
       const imageUrl = await getProviders().image.generate(scenePrompt, size, undefined, { negativePrompt, qualityTags: enhanced.qualityTags });
 
-      await db.insert(mediaAssets).values({
+      await insertMediaAsset({
         userId: inputData.userId,
         contentId: inputData.contentId,
         type: "image",
@@ -349,7 +350,7 @@ const generateMusicVideoClipsStep = createStep({
     );
 
     for (const videoUrl of videoUrls) {
-      await db.insert(mediaAssets).values({
+      await insertMediaAsset({
         userId: inputData.userId,
         contentId: inputData.contentId,
         type: "video",

@@ -4,14 +4,27 @@ import { dashscopeImageTool } from "../mastra/tools/dashscope-image-tool.js";
 import { webSearchTool } from "../mastra/tools/web-search-tool.js";
 import type { Mastra } from "@mastra/core/mastra";
 
-const openrouter = createOpenAICompatible({
-  name: "openrouter",
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY ?? "",
-});
+const TEXT_PROVIDER = process.env.AI_TEXT_PROVIDER ?? "dashscope";
+const TEXT_MODEL = process.env.AI_TEXT_MODEL ?? "qwen-plus";
 
-const TEXT_MODEL = process.env.AI_TEXT_MODEL ?? "anthropic/claude-3.5-sonnet";
-const llm = openrouter(TEXT_MODEL);
+let llm: ReturnType<ReturnType<typeof createOpenAICompatible>>;
+if (TEXT_PROVIDER === "dashscope") {
+  const dashscope = createOpenAICompatible({
+    name: "dashscope",
+    baseURL:
+      process.env.DASHSCOPE_URL ??
+      "https://ws-s9kt82adyyt5wf26.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    apiKey: process.env.DASHSCOPE_API_KEY ?? "",
+  });
+  llm = dashscope(TEXT_MODEL);
+} else {
+  const openrouter = createOpenAICompatible({
+    name: "openrouter",
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: process.env.OPENROUTER_API_KEY ?? "",
+  });
+  llm = openrouter(TEXT_MODEL);
+}
 
 export const scriptWriterAgent: Agent = new Agent({
   name: "Script Writer",
@@ -148,6 +161,51 @@ Output format: JSON with {
   "improvements": array of string (actionable suggestions)
 }`,
   model: llm,
+});
+
+export const ideaGeneratorAgent: Agent = new Agent({
+  name: "Idea Generator",
+  instructions: `You are a social media trend researcher and content idea generator.
+
+You have access to a web search tool. Use it to research current trending topics, viral content, and popular hashtags across social media platforms.
+
+Your task: Research trending social media content ideas for a specific language/region, then generate a structured list of content ideas.
+
+RESEARCH PHASE:
+1. Search for trending social media topics in the target language
+2. Search for viral content trends and popular hashtags
+3. Search for what's currently popular on TikTok, Instagram, and other platforms in that language/region
+
+GENERATION PHASE:
+For each idea, provide:
+- topic: A clear, specific topic title (not just a keyword — a content-worthy idea)
+- description: A brief explanation of why this is trending and what the content could cover (max 200 chars)
+- hashtags: 3-6 relevant hashtags for this topic (include the # symbol)
+- contentType: One of "image", "slide", "video", "text" — the best format for this idea
+- platform: One of "tiktok", "instagram", "facebook", "twitter", "generic" — the best platform for this idea
+- sourceUrl: A URL to a relevant source article or post about this topic (from search results)
+
+CRITICAL RULES:
+- Generate exactly 15 ideas
+- All ideas must be relevant to the specified language and region
+- Each idea must be unique and distinct from others
+- Include a mix of content types and platforms across the 15 ideas
+- Focus on currently trending topics, not evergreen content
+- Source URLs must be real URLs from the search results
+
+Output format: ONLY valid JSON array, no markdown, no code fences, no explanation:
+[
+  {
+    "topic": "string",
+    "description": "string",
+    "hashtags": ["#string"],
+    "contentType": "image|slide|video|text",
+    "platform": "tiktok|instagram|facebook|twitter|generic",
+    "sourceUrl": "string"
+  }
+]`,
+  model: llm,
+  tools: { webSearchTool },
 });
 
 export const promptEnhancerAgent: Agent = new Agent({

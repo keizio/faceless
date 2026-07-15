@@ -8,6 +8,7 @@ import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/a
 import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
+import { insertMediaAsset } from "../../lib/media.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType, BrandKit } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
@@ -341,7 +342,7 @@ const generateImageStep = createStep({
       const rightDescription = (inputData.templateInputs.rightDescription as string) ?? inputData.enhancedPrompt;
 
       const leftUrl = await getProviders().image.generate(leftDescription, size, undefined, { negativePrompt, qualityTags });
-      await db.insert(mediaAssets).values({
+      await insertMediaAsset({
         userId: inputData.userId,
         contentId: inputData.contentId,
         type: "image",
@@ -352,7 +353,7 @@ const generateImageStep = createStep({
       imageUrls.push(leftUrl);
 
       const rightUrl = await getProviders().image.generate(rightDescription, size, undefined, { negativePrompt, qualityTags });
-      await db.insert(mediaAssets).values({
+      await insertMediaAsset({
         userId: inputData.userId,
         contentId: inputData.contentId,
         type: "image",
@@ -364,7 +365,7 @@ const generateImageStep = createStep({
     } else {
       const imageUrl = await getProviders().image.generate(inputData.enhancedPrompt, size, undefined, { negativePrompt, qualityTags });
 
-      await db.insert(mediaAssets).values({
+      await insertMediaAsset({
         userId: inputData.userId,
         contentId: inputData.contentId,
         type: "image",
@@ -563,7 +564,7 @@ const saveImageVersionStep = createStep({
       .returning();
 
     for (const url of inputData.compositedImageUrls) {
-      await db.insert(mediaAssets).values({
+      await insertMediaAsset({
         userId: inputData.userId,
         contentId: inputData.contentId,
         type: "image",

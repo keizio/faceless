@@ -196,6 +196,25 @@ export const mediaAssets = pgTable(
   ],
 );
 
+export const ideas = pgTable(
+  "ideas",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    language: text("language").notNull(),
+    date: text("date").notNull(),
+    topic: text("topic").notNull(),
+    description: text("description"),
+    hashtags: jsonb("hashtags").$type<string[]>().default([]).notNull(),
+    contentType: text("content_type"),
+    platform: text("platform"),
+    sourceUrl: text("source_url"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("ideas_lang_date_idx").on(table.language, table.date),
+  ],
+);
+
 export const notifications = pgTable(
   "notifications",
   {

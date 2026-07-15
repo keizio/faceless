@@ -8,6 +8,7 @@ import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/a
 import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
+import { insertMediaAsset } from "../../lib/media.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType, BrandKit } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
@@ -294,7 +295,7 @@ const generateSlideImagesStep = createStep({
       const negativePrompt = getNegativePrompt(inputData.platform as Platform);
       const imageUrl = await getProviders().image.generate(slidePrompt, size, undefined, { negativePrompt });
 
-      await db.insert(mediaAssets).values({
+      await insertMediaAsset({
         userId: inputData.userId,
         contentId: inputData.contentId,
         type: "image",
@@ -530,7 +531,7 @@ const saveSlideVersionStep = createStep({
 
     if (!isTextContent) {
       for (const url of inputData.compositedImageUrls) {
-        await db.insert(mediaAssets).values({
+        await insertMediaAsset({
           userId: inputData.userId,
           contentId: inputData.contentId,
           type: "image",

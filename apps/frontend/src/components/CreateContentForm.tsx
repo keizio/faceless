@@ -60,18 +60,23 @@ const ASPECT_RATIO_ICONS: Record<string, React.ReactNode> = {
 
 interface CreateContentFormProps {
   onSuccess?: () => void;
+  initialValues?: {
+    prompt?: string;
+    type?: "image" | "slide" | "video" | "text";
+    platform?: string;
+  };
 }
 
-export function CreateContentForm({ onSuccess }: CreateContentFormProps) {
+export function CreateContentForm({ onSuccess, initialValues }: CreateContentFormProps) {
   const router = useRouter();
   const { data: projects } = useProjects();
   const { data: avatars } = useAvatars();
   const { data: userProfile } = useUserProfile();
   
   const [projectId, setProjectId] = useState<string>("");
-  const [type, setType] = useState<"image" | "slide" | "video" | "text" | null>(null);
-  const [prompt, setPrompt] = useState("");
-  const [platform, setPlatform] = useState("generic");
+  const [type, setType] = useState<"image" | "slide" | "video" | "text" | null>(initialValues?.type ?? null);
+  const [prompt, setPrompt] = useState(initialValues?.prompt ?? "");
+  const [platform, setPlatform] = useState(initialValues?.platform ?? "generic");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [language, setLanguage] = useState("en");
   const [title, setTitle] = useState("");
@@ -86,6 +91,16 @@ export function CreateContentForm({ onSuccess }: CreateContentFormProps) {
       setLanguage(userProfile.language);
     }
   }, [userProfile?.language]);
+
+  useEffect(() => {
+    if (initialValues?.type) setType(initialValues.type);
+    if (initialValues?.prompt) setPrompt(initialValues.prompt);
+    if (initialValues?.platform) {
+      setPlatform(initialValues.platform);
+      const specs = PLATFORM_SPECS[initialValues.platform as keyof typeof PLATFORM_SPECS];
+      if (specs) setAspectRatio(specs.aspectRatios[0]);
+    }
+  }, [initialValues?.type, initialValues?.prompt, initialValues?.platform]);
 
   useEffect(() => {
     if (projects && projects.length === 1 && !projectId) {
@@ -266,7 +281,9 @@ export function CreateContentForm({ onSuccess }: CreateContentFormProps) {
                 ))}
               </div>
             </div>
-            <div>
+          </div>
+
+          <div>
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                 Language
               </label>
@@ -283,7 +300,6 @@ export function CreateContentForm({ onSuccess }: CreateContentFormProps) {
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
           {/* Advanced toggle */}
           <div>

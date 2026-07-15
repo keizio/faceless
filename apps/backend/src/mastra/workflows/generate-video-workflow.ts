@@ -13,6 +13,7 @@ import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/a
 import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
+import { insertMediaAsset } from "../../lib/media.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType, BrandKit } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
@@ -386,7 +387,7 @@ const generateVideoImagesStep = createStep({
       const negativePrompt = getNegativePrompt(contextData.platform as Platform);
       const imageUrl = await getProviders().image.generate(scenePrompt, size, undefined, { negativePrompt, qualityTags: enhanced.qualityTags });
 
-      await db.insert(mediaAssets).values({
+      await insertMediaAsset({
         userId: inputData.userId,
         contentId: inputData.contentId,
         type: "image",
@@ -638,7 +639,7 @@ const generateVideoClipsStep = createStep({
     );
 
     for (const videoUrl of videoUrls) {
-      await db.insert(mediaAssets).values({
+      await insertMediaAsset({
         userId: inputData.userId,
         contentId: inputData.contentId,
         type: "video",
@@ -698,7 +699,7 @@ const generateVoiceoverStep = createStep({
     const audioProvider = getProviders().audio;
     const audioResult = await audioProvider.generate(inputData.narrationText);
 
-    await db.insert(mediaAssets).values({
+    await insertMediaAsset({
       userId: inputData.userId,
       contentId: inputData.contentId,
       type: "audio",
