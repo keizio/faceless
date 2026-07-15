@@ -14,12 +14,18 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Settings, Save } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function SettingsPage() {
   const { data: user, isLoading } = useUserProfile();
   const updateLanguage = useUpdateLanguage();
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.language && selectedLanguage === null) {
+      setSelectedLanguage(user.language);
+    }
+  }, [user?.language, selectedLanguage]);
 
   const currentLanguage = selectedLanguage ?? user?.language ?? "en";
 
@@ -77,7 +83,6 @@ export default function SettingsPage() {
                 <Button
                   onClick={handleSave}
                   disabled={
-                    !selectedLanguage ||
                     selectedLanguage === user?.language ||
                     updateLanguage.isPending
                   }

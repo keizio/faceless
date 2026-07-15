@@ -6,7 +6,44 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+const LabelRegistryContext = React.createContext<{
+  registerLabel: (value: string, label: string) => void
+  resolveLabel: (value: string) => string | undefined
+}>({ registerLabel: () => {}, resolveLabel: () => undefined })
+
+function Select<Value, Multiple extends boolean | undefined = false>({
+  children,
+  items: itemsProp,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const registryRef = React.useRef(new Map<string, string>())
+  const [version, setVersion] = React.useState(0)
+
+  const items = React.useMemo(() => {
+    if (itemsProp) return itemsProp
+    const result: Array<{ value: string; label: string }> = []
+    registryRef.current.forEach((label, value) => {
+      result.push({ value, label })
+    })
+    return result
+  }, [itemsProp, version]) // eslint-disable-line react-hooks/exhaustive-deps -- version triggers recomputation when registryRef is mutated
+
+  const ctxValue = React.useMemo(() => ({
+    registerLabel: (value: string, label: string) => {
+      registryRef.current.set(value, label)
+      setVersion(v => v + 1)
+    },
+    resolveLabel: (value: string) => registryRef.current.get(value),
+  }), [])
+
+  return (
+    <LabelRegistryContext.Provider value={ctxValue}>
+      <SelectPrimitive.Root items={items} {...props}>
+        {children}
+      </SelectPrimitive.Root>
+    </LabelRegistryContext.Provider>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
@@ -18,13 +55,24 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   )
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+function SelectValue({ className, children: childrenProp, placeholder, ...props }: SelectPrimitive.Value.Props) {
+  const ctx = React.useContext(LabelRegistryContext)
+
+  const renderChildren = React.useCallback((value: string) => {
+    if (value == null) {
+      return placeholder ?? null
+    }
+    return ctx.resolveLabel(value) ?? value
+  }, [placeholder, ctx])
+
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
       {...props}
-    />
+    >
+      {childrenProp ?? renderChildren}
+    </SelectPrimitive.Value>
   )
 }
 
@@ -113,7 +161,16 @@ function SelectItem({
   children,
   ...props
 }: SelectPrimitive.Item.Props) {
+  const ctx = React.useContext(LabelRegistryContext)
+  const value = props.value
   const label = typeof children === 'string' ? children : undefined
+
+  React.useLayoutEffect(() => {
+    if (value != null) {
+      ctx.registerLabel(String(value), label ?? String(value))
+    }
+  }, [ctx, value, label])
+
   return (
     <SelectPrimitive.Item
       data-slot="select-item"

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell, CheckCheck, CheckCircle2, XCircle, Image, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -12,12 +12,12 @@ import {
   useMarkAllAsRead,
 } from "@/hooks/useNotifications";
 
-const TYPE_ICONS: Record<string, string> = {
-  content_generated: "✅",
-  content_failed: "❌",
-  avatar_generated: "🖼️",
-  avatar_failed: "❌",
-  system: "🔔",
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  content_generated: <CheckCircle2 className="h-4 w-4 text-[hsl(var(--success))]" />,
+  content_failed: <XCircle className="h-4 w-4 text-destructive" />,
+  avatar_generated: <Image className="h-4 w-4 text-primary" />,
+  avatar_failed: <XCircle className="h-4 w-4 text-destructive" />,
+  system: <AlertTriangle className="h-4 w-4 text-[hsl(var(--warning))]" />,
 };
 
 function timeAgo(dateStr: string): string {
@@ -126,8 +126,8 @@ export function NotificationBell() {
                   onClick={() => handleNotificationClick(n)}
                   className="flex w-full gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted"
                 >
-                  <span className="mt-0.5 shrink-0 text-base">
-                    {TYPE_ICONS[n.type] || "🔔"}
+                  <span className="mt-0.5 shrink-0">
+                    {TYPE_ICONS[n.type] || <Bell className="h-4 w-4 text-muted-foreground" />}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">

@@ -137,6 +137,14 @@ function buildFakeChatPrompts(inputs: Record<string, unknown>): TemplatePrompts 
   const chatStyle = inputs.chatStyle as string ?? "whatsapp";
   const senderName = inputs.senderName as string ?? "You";
   const receiverName = inputs.receiverName as string ?? "Friend";
+  const rawMessages = inputs.messages as Array<string | { sender: string; text: string }> ?? [];
+
+  const chatMessages = rawMessages.map((msg) =>
+    typeof msg === "string" ? { sender: "you", text: msg } : { sender: msg.sender ?? "you", text: msg.text ?? "" },
+  );
+  const dialogueLines = chatMessages
+    .map((m) => `${m.sender === "you" ? senderName : receiverName}: ${m.text}`)
+    .join("\n");
 
   return {
     systemPrompt: `You are creating a realistic chat conversation for social media content.
@@ -144,6 +152,9 @@ Generate engaging, believable dialogue between two people.
 
 Chat style: ${chatStyle}
 Participants: ${senderName} and ${receiverName}
+
+Conversation outline:
+${dialogueLines}
 
 RULES:
 - Keep messages short and natural (like real texting)

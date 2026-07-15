@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, X, GripVertical } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import type { ContentTemplate, TemplateInputField } from "@faceless/shared";
 
 interface TemplateFormProps {
@@ -127,7 +127,7 @@ function TemplateField({
       );
 
     case "array":
-      return <ArrayField field={field} value={value as string[] | undefined} onChange={onChange} />;
+      return <ArrayField field={field} value={value as string[] | undefined} onChange={(v) => onChange(v)} />;
 
     case "file":
       return (
@@ -144,6 +144,7 @@ function TemplateField({
               if (file) {
                 onChange({ name: file.name, size: file.size, type: file.type });
               }
+              e.target.value = "";
             }}
             className="h-8 text-sm"
           />
@@ -161,6 +162,21 @@ function TemplateField({
 }
 
 function ArrayField({
+  field,
+  value,
+  onChange,
+}: {
+  field: TemplateInputField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}) {
+  if (field.itemSchema && field.itemSchema.length > 0) {
+    return <StructuredArrayField field={field} items={value as Record<string, unknown>[] | undefined} onChange={(v) => onChange(v)} />;
+  }
+  return <FlatArrayField field={field} value={value as string[] | undefined} onChange={(v) => onChange(v)} />;
+}
+
+function FlatArrayField({
   field,
   value,
   onChange,
@@ -194,10 +210,9 @@ function ArrayField({
         <div className="space-y-1.5 mb-2">
           {items.map((item, i) => (
             <div
-              key={i}
+              key={`${item}-${i}`}
               className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/50 text-xs"
             >
-              <GripVertical className="h-3 w-3 text-muted-foreground/50 shrink-0" />
               <span className="flex-1 truncate">{item}</span>
               <button
                 type="button"
@@ -235,6 +250,106 @@ function ArrayField({
           <Plus className="h-3 w-3" />
         </Button>
       </div>
+    </div>
+  );
+}
+
+function StructuredArrayField({
+  field,
+  items,
+  onChange,
+}: {
+  field: TemplateInputField;
+  items: Record<string, unknown>[] | undefined;
+  onChange: (value: Record<string, unknown>[]) => void;
+}) {
+  const list = items ?? [];
+
+  const addItem = () => {
+    const newItem: Record<string, unknown> = {};
+    for (const sf of field.itemSchema!) {
+      newItem[sf.id] = sf.defaultValue ?? "";
+    }
+    onChange([...list, newItem]);
+  };
+
+  const removeItem = (index: number) => {
+    onChange(list.filter((_, i) => i !== index));
+  };
+
+  const updateItem = (index: number, key: string, value: unknown) => {
+    const updated = [...list];
+    updated[index] = { ...updated[index], [key]: value };
+    onChange(updated);
+  };
+
+  const selectFields = field.itemSchema!.filter((sf) => sf.type === "select");
+  const inputFields = field.itemSchema!.filter((sf) => sf.type !== "select");
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+        {field.label}
+        {field.required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+
+      {list.length > 0 && (
+        <div className="space-y-2 mb-2">
+          {list.map((item, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-2 px-2 py-1.5 rounded-md bg-muted/50 text-xs"
+            >
+              {selectFields.map((sf) => (
+                <Select
+                  key={sf.id}
+                  value={(item[sf.id] as string) ?? (sf.defaultValue as string) ?? ""}
+                  onValueChange={(v) => updateItem(i, sf.id, v)}
+                >
+                  <SelectTrigger className="w-20 shrink-0 h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sf.options?.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ))}
+              {inputFields.map((sf) => (
+                <Input
+                  key={sf.id}
+                  type={sf.type === "number" ? "number" : "text"}
+                  value={(item[sf.id] as string) ?? (sf.defaultValue as string) ?? ""}
+                  onChange={(e) => updateItem(i, sf.id, e.target.value)}
+                  placeholder={sf.placeholder}
+                  className="flex-1 h-7 text-xs"
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => removeItem(i)}
+                className="text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-0.5"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Button
+        type="button"
+        onClick={addItem}
+        variant="outline"
+        size="sm"
+        className="h-7 px-3 text-xs"
+      >
+        <Plus className="h-3 w-3 mr-1" />
+        Add Message
+      </Button>
     </div>
   );
 }

@@ -46,4 +46,4 @@ export {
   quoteCardTemplate,
 };
 
-export type { ContentTemplate, TemplateCategory, RenderMode, TemplateInputField, TemplateFieldType } from "./types";
+export type { ContentTemplate, TemplateCategory, RenderMode, TemplateInputField, TemplateFieldType, TemplateItemField } from "./types";

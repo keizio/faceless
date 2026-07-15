@@ -15,6 +15,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, use, useRef, useEffect } from "react";
@@ -46,6 +53,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
   const [speechStyle, setSpeechStyle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!avatar) return;
@@ -75,7 +83,6 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
   };
 
   const handleDelete = () => {
-    if (!confirm("Delete this avatar? This cannot be undone.")) return;
     deleteAvatar.mutate(id, { onSuccess: () => router.push("/avatars") });
   };
 
@@ -141,7 +148,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={handleDelete}
+                      onClick={() => setShowDeleteConfirm(true)}
                       className="text-destructive hover:bg-destructive/10"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -321,7 +328,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                     <div className="flex justify-end gap-3 pt-1">
                       <Button
                         onClick={handleSave}
-                        disabled={updateAvatar.isPending || !name.trim()}
+                        disabled={updateAvatar.isPending || !name.trim() || uploadAvatarImage.isPending}
                         size="sm"
                       >
                         {updateAvatar.isPending ? "Saving..." : "Save"}
@@ -330,6 +337,36 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Delete confirm dialog */}
+              <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Delete Avatar?</DialogTitle>
+                    <DialogDescription>
+                      This action cannot be undone. All avatar data will be permanently deleted.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex justify-end gap-3 pt-2">
+                    <Button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      variant="outline"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        handleDelete();
+                        setShowDeleteConfirm(false);
+                      }}
+                      variant="destructive"
+                      disabled={deleteAvatar.isPending}
+                    >
+                      {deleteAvatar.isPending ? "Deleting..." : "Delete"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </>
           ) : (
             <Card className="flex flex-col items-center py-12 text-center border-border/50">

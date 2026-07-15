@@ -141,24 +141,27 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                       {content.type === "slide" ? "Slides" : "Images"} ({images.length})
                     </h2>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {images.map((img: { id: string; url: string }, i: number) => (
-                        <button
-                          key={img.id}
-                          onClick={() => setSelectedImageIndex(i)}
-                          className="relative aspect-[9/16] rounded-lg overflow-hidden bg-muted group cursor-pointer"
-                        >
-                          <img
-                            src={img.url}
-                            alt={`${content.type === "slide" ? "Slide" : "Image"} ${i + 1}`}
-                            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-                          />
-                          {content.type === "slide" && (
-                            <div className="absolute bottom-2 left-2 rounded-full bg-background/80 px-2 py-0.5 text-[11px] font-medium">
-                              {i + 1}/{images.length}
-                            </div>
-                          )}
-                        </button>
-                      ))}
+                      {images.map((img: { id: string; url: string }, i: number) => {
+                        const aspectClass = content.aspectRatio === "16:9" ? "aspect-video" : content.aspectRatio === "1:1" ? "aspect-square" : content.aspectRatio === "4:5" ? "aspect-[4/5]" : "aspect-[9/16]";
+                        return (
+                          <button
+                            key={img.id}
+                            onClick={() => setSelectedImageIndex(i)}
+                            className={`relative ${aspectClass} rounded-lg overflow-hidden bg-muted group cursor-pointer`}
+                          >
+                            <img
+                              src={img.url}
+                              alt={`${content.type === "slide" ? "Slide" : "Image"} ${i + 1}`}
+                              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                            />
+                            {content.type === "slide" && (
+                              <div className="absolute bottom-2 left-2 rounded-full bg-background/80 px-2 py-0.5 text-[11px] font-medium">
+                                {i + 1}/{images.length}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>

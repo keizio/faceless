@@ -37,22 +37,22 @@ const PLATFORMS = [
 
 const ASPECT_RATIO_ICONS: Record<string, React.ReactNode> = {
   "9:16": (
-    <svg key="9:16" viewBox="0 0 9 16" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 9 16" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <rect x="1" y="1" width="7" height="14" rx="1" />
     </svg>
   ),
   "1:1": (
-    <svg key="1:1" viewBox="0 0 16 16" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 16 16" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <rect x="1" y="1" width="14" height="14" rx="1" />
     </svg>
   ),
   "4:5": (
-    <svg key="4:5" viewBox="0 0 8 10" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 8 10" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <rect x="1" y="1" width="6" height="8" rx="1" />
     </svg>
   ),
   "16:9": (
-    <svg key="16:9" viewBox="0 0 16 9" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 16 9" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <rect x="1" y="1" width="14" height="7" rx="1" />
     </svg>
   ),

@@ -18,7 +18,7 @@ import {
 import { Sparkles, Loader2, ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { use } from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCreateContent } from "@/hooks/useContents";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -36,15 +36,26 @@ export default function TemplateDetailPage({
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [selectedPlatform, setSelectedPlatform] = useState<string>(
-    template?.defaultPlatform ?? "generic",
+    "generic",
   );
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>(
-    template?.defaultAspectRatio ?? "16:9",
+    "16:9",
   );
   const [selectedLanguage, setSelectedLanguage] = useState<string>(
-    userProfile?.language ?? "en",
+    "en",
   );
+  const [selectedContentType, setSelectedContentType] = useState<string>("image");
   const [templateInputs, setTemplateInputs] = useState<Record<string, unknown>>({});
+
+  useEffect(() => {
+    if (template?.defaultContentType) setSelectedContentType(template.defaultContentType);
+    if (template?.defaultPlatform) setSelectedPlatform(template.defaultPlatform);
+    if (template?.defaultAspectRatio) setSelectedAspectRatio(template.defaultAspectRatio);
+  }, [template]);
+
+  useEffect(() => {
+    if (userProfile?.language) setSelectedLanguage(userProfile.language);
+  }, [userProfile]);
 
   const createContent = useCreateContent(selectedProjectId);
 
@@ -80,14 +91,24 @@ export default function TemplateDetailPage({
   const platformSpecs = PLATFORM_SPECS[selectedPlatform as keyof typeof PLATFORM_SPECS];
   const aspectRatios = platformSpecs?.aspectRatios ?? ["16:9"];
 
+  const OUTPUT_TYPE_LABELS: Record<string, string> = {
+    image: "Image",
+    slide: "Slide",
+    video: "Video",
+    text: "Text",
+  };
+
   const buildPrompt = (): string => {
     const parts: string[] = [];
     for (const field of template.inputFields) {
       const value = templateInputs[field.id];
       if (value && typeof value === "string" && value.trim()) {
         parts.push(`${field.label}: ${value}`);
-      } else if (value && Array.isArray(value) && value.length > 0) {
-        parts.push(`${field.label}: ${value.join(", ")}`);
+      } else if (value && (Array.isArray(value) || typeof value === "object")) {
+        const jsonStr = JSON.stringify(value);
+        if (jsonStr && jsonStr !== "{}" && jsonStr !== "[]") {
+          parts.push(`${field.label}: ${jsonStr}`);
+        }
       }
     }
     return parts.join("\n") || template.description;
@@ -99,7 +120,7 @@ export default function TemplateDetailPage({
     const prompt = buildPrompt();
     createContent.mutate(
       {
-        type: template.defaultContentType,
+        type: selectedContentType,
         platform: selectedPlatform,
         aspectRatio: selectedAspectRatio,
         language: selectedLanguage,
@@ -161,6 +182,29 @@ export default function TemplateDetailPage({
                   </SelectContent>
                 </Select>
               </div>
+
+              {template.supportedContentTypes.length > 1 && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Content Type
+                  </label>
+                  <Select
+                    value={selectedContentType}
+                    onValueChange={(v) => v && setSelectedContentType(v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {template.supportedContentTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {OUTPUT_TYPE_LABELS[type] ?? type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>

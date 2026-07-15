@@ -13,6 +13,16 @@ export type RenderMode = "ai" | "composite" | "hybrid";
 
 export type TemplateFieldType = "text" | "textarea" | "select" | "number" | "file" | "array";
 
+export interface TemplateItemField {
+  id: string;
+  label: string;
+  type: TemplateFieldType;
+  required: boolean;
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+  defaultValue?: unknown;
+}
+
 export interface TemplateInputField {
   id: string;
   label: string;
@@ -23,6 +33,7 @@ export interface TemplateInputField {
   min?: number;
   max?: number;
   defaultValue?: unknown;
+  itemSchema?: TemplateItemField[];
 }
 
 export interface ContentTemplate {

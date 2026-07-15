@@ -186,7 +186,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             {pathname.split("/").filter(Boolean).map((segment, i, arr) => (
               <span key={segment} className="flex items-center gap-2 min-w-0">
                 {i > 0 && <span className="text-muted-foreground shrink-0">/</span>}
-                <span className={`text-truncate max-w-[120px] sm:max-w-none ${
+                <span className={`truncate max-w-[120px] sm:max-w-none ${
                   i === arr.length - 1 ? "text-foreground font-medium" : "text-muted-foreground"
                 }`}>
                   {segment.charAt(0).toUpperCase() + segment.slice(1)}

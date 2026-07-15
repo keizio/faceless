@@ -44,6 +44,26 @@ export const fakeChatTemplate: ContentTemplate = {
       type: "array",
       required: true,
       placeholder: "Add conversation messages",
+      itemSchema: [
+        {
+          id: "sender",
+          label: "Sender",
+          type: "select",
+          required: true,
+          options: [
+            { value: "you", label: "You" },
+            { value: "them", label: "He/She" },
+          ],
+          defaultValue: "you",
+        },
+        {
+          id: "text",
+          label: "Message",
+          type: "text",
+          required: true,
+          placeholder: "Type your message...",
+        },
+      ],
     },
   ],
   defaultContentType: "image",
