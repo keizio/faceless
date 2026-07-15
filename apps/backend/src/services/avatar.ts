@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { avatars, generationJobs } from "../db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { CREDIT_COSTS } from "@faceless/shared";
 import { enqueueAvatarGeneration } from "../queues/avatar-generation.js";
 import { UsageService } from "./usage.js";
 
@@ -64,6 +65,7 @@ export class AvatarService {
       gender: string;
       speechStyle: string;
       referenceImageUrl: string;
+      portraitUrl: string;
       customPrompt: string;
     }>,
   ) {
@@ -106,9 +108,10 @@ export class AvatarService {
 
   async generateCharacterSheet(userId: string, avatarId: string, customPrompt?: string) {
     const usageService = new UsageService();
-    const limit = await usageService.checkGenerationLimit(userId);
+    const cost = CREDIT_COSTS.avatar;
+    const limit = await usageService.checkGenerationLimit(userId, cost);
     if (!limit.allowed) {
-      throw new Error(`Daily generation limit reached. You have used ${limit.limit} out of ${limit.limit} generations. Upgrade to pro for more.`);
+      throw new Error(`Insufficient credits. You need ${cost} credits but have ${limit.credits}.`);
     }
 
     const avatar = await this.getAvatar(userId, avatarId);
@@ -124,6 +127,8 @@ export class AvatarService {
         status: "pending",
       })
       .returning();
+
+    await usageService.deductCredits(userId, cost);
 
     await enqueueAvatarGeneration({
       jobId: job.id,

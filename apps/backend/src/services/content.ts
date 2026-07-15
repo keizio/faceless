@@ -2,6 +2,7 @@ import { db } from "../db/index.js";
 import { contents, contentVersions, generationJobs, mediaAssets } from "../db/schema.js";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { enqueueContentGeneration } from "../queues/content-generation.js";
+import { CREDIT_COSTS } from "@faceless/shared";
 import { UsageService } from "./usage.js";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
@@ -23,9 +24,10 @@ export class ContentService {
     },
   ) {
     const usageService = new UsageService();
-    const limit = await usageService.checkGenerationLimit(userId);
+    const cost = CREDIT_COSTS[data.type];
+    const limit = await usageService.checkGenerationLimit(userId, cost);
     if (!limit.allowed) {
-      throw new Error(`Daily generation limit reached. You have used ${limit.limit} out of ${limit.limit} generations. Upgrade to pro for more.`);
+      throw new Error(`Insufficient credits. You need ${cost} credits but have ${limit.credits}.`);
     }
     const [content] = await db
       .insert(contents)
@@ -54,6 +56,8 @@ export class ContentService {
         status: "pending",
       })
       .returning();
+
+    await usageService.deductCredits(userId, cost);
 
     await enqueueContentGeneration({
       jobId: job.id,

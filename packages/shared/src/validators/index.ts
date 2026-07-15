@@ -53,6 +53,7 @@ export const createAvatarSchema = z.object({
     ])
     .optional(),
   referenceImageUrl: z.string().url().optional(),
+  portraitUrl: z.string().url().optional(),
   customPrompt: z.string().max(1000).optional(),
 });
 

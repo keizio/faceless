@@ -116,8 +116,8 @@ const { data: projectsData, isLoading } = useProjects();
             />
             <StatsCard
               icon={<Zap className="h-5 w-5 text-primary" />}
-              label="Generated Today"
-              value={stats?.generatedToday ?? "--"}
+              label="Credits Remaining"
+              value={stats?.credits ?? "--"}
               loading={isLoading}
             />
             <StatsCard

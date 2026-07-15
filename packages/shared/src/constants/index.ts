@@ -52,13 +52,19 @@ export const SPEECH_STYLE_LABELS = {
   educational: "Educational",
 } as const;
 
+export const CREDIT_COSTS = {
+  text: 1,
+  image: 2,
+  slide: 3,
+  video: 5,
+  avatar: 2,
+} as const;
+
 export const CONTENT_LIMITS = {
   maxProjectsPerUser: 50,
   maxContentsPerProject: 200,
   maxVersionsPerContent: 20,
   maxPromptLength: 2000,
-  freePlanGenerationsPerDay: 5,
-  proPlanGenerationsPerDay: 100,
 } as const;
 
 export const LANGUAGES = [

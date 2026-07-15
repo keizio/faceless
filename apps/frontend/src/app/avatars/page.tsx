@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useState, useMemo } from "react";
-import { User, Plus, Sparkles, ChevronRight, Search } from "lucide-react";
+import { User, Plus, Sparkles, Search } from "lucide-react";
 
 export default function AvatarsPage() {
   const { data: avatars, isLoading } = useAvatars();
@@ -32,7 +32,7 @@ export default function AvatarsPage() {
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in space-y-6">
+        <div className="animate-fade-in space-y-4">
           <PageHeader
             title="Avatars"
             subtitle="Personas and character profiles for your content"
@@ -48,7 +48,6 @@ export default function AvatarsPage() {
             }
           />
 
-          {/* Search */}
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -59,7 +58,6 @@ export default function AvatarsPage() {
             />
           </div>
 
-          {/* Avatar grid */}
           {isLoading ? (
             <ProjectGridSkeleton count={3} />
           ) : filtered.length === 0 ? (
@@ -76,7 +74,7 @@ export default function AvatarsPage() {
               }
             />
           ) : (
-            <div className="isometric-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
               {filtered.map((avatar: {
                 id: string;
                 name: string;
@@ -91,46 +89,40 @@ export default function AvatarsPage() {
                 <Link
                   key={avatar.id}
                   href={`/avatars/${avatar.id}`}
-                  className="isometric-card"
                 >
-                  <Card className="h-full border-border/50 depth-2 group cursor-pointer transition-all duration-200 hover:bg-muted/50">
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-[hsl(var(--accent-secondary))]/20">
-                          {avatar.portraitUrl || avatar.referenceImageUrl ? (
-                            <img
-                              src={avatar.portraitUrl ?? avatar.referenceImageUrl ?? ""}
-                              alt={avatar.name}
-                              className="h-12 w-12 rounded-lg object-cover"
-                            />
-                          ) : (
-                            <User className="h-5 w-5 text-primary" />
-                          )}
+                  <Card className="h-full border-border/50 cursor-pointer transition-all duration-200 hover:bg-muted/50 overflow-hidden">
+                    <div className="relative aspect-[3/4] bg-gradient-to-br from-primary/5 to-[hsl(var(--accent-secondary))]/5">
+                      {avatar.portraitUrl || avatar.referenceImageUrl ? (
+                        <img
+                          src={avatar.portraitUrl ?? avatar.referenceImageUrl ?? ""}
+                          alt={avatar.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center">
+                          <User className="h-8 w-8 text-muted-foreground/40" />
                         </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                      </div>
-                      <h3 className="mt-3 font-semibold text-foreground">
+                      )}
+                      {avatar.characterSheetUrl && (
+                        <div className="absolute top-2 right-2 rounded-full bg-[hsl(var(--success))]/90 px-2 py-0.5 text-[10px] font-medium text-white">
+                          <Sparkles className="mr-0.5 inline h-2.5 w-2.5" />
+                          Sheet
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-2.5">
+                      <p className="text-sm font-medium text-foreground truncate">
                         {avatar.name}
-                      </h3>
-                      <div className="mt-1 space-y-1">
-                        {(avatar.age || avatar.gender) && (
-                          <p className="text-xs text-muted-foreground/70">
-                            {[getAgeRangeLabel(avatar.age), avatar.gender].filter(Boolean).join(" · ")}
-                          </p>
-                        )}
-                        {avatar.speechStyle && (
-                          <p className="text-xs text-muted-foreground/70">
-                            {SPEECH_STYLE_LABELS[avatar.speechStyle as keyof typeof SPEECH_STYLE_LABELS] || avatar.speechStyle}
-                          </p>
-                        )}
-                        {avatar.characterSheetUrl && (
-                          <p className="flex items-center gap-1 text-xs text-[hsl(var(--success))]">
-                            <Sparkles className="h-3 w-3" />
-                            Character sheet generated
-                          </p>
-                        )}
-                      </div>
-                    </CardContent>
+                      </p>
+                      {(avatar.age || avatar.gender || avatar.speechStyle) && (
+                        <p className="mt-0.5 text-[11px] text-muted-foreground/70 truncate">
+                          {[getAgeRangeLabel(avatar.age), avatar.gender].filter(Boolean).join(" · ")}
+                          {avatar.speechStyle && (
+                            <> · {SPEECH_STYLE_LABELS[avatar.speechStyle as keyof typeof SPEECH_STYLE_LABELS] || avatar.speechStyle}</>
+                          )}
+                        </p>
+                      )}
+                    </div>
                   </Card>
                 </Link>
               ))}

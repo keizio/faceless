@@ -59,6 +59,7 @@ export const users = pgTable("users", {
   name: text("name"),
   plan: text("plan").default("free").notNull(),
   language: text("language").default("en").notNull(),
+  credits: integer("credits").default(1000).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

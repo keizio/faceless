@@ -33,6 +33,7 @@ export function useCreateAvatar() {
       gender?: string;
       speechStyle?: string;
       referenceImageUrl?: string;
+      portraitUrl?: string;
     }) => {
       const { data } = await api.post("/api/avatars", body);
       return data.avatar;
@@ -52,6 +53,7 @@ export function useUpdateAvatar(id: string) {
       gender: string;
       speechStyle: string;
       referenceImageUrl: string;
+      portraitUrl: string;
     }>) => {
       const { data } = await api.put(`/api/avatars/${id}`, body);
       return data.avatar;

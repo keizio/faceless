@@ -107,7 +107,7 @@ export default function ProjectsPage() {
             </div>
             <div className="flex items-center gap-2">
               <Select value={sort} onValueChange={(v) => v && setSort(v)}>
-                <SelectTrigger className="h-9 w-[130px] text-xs">
+                <SelectTrigger className="h-9 w-[130px] text-xs text-primary">
                   <ArrowUpDown className="mr-1.5 h-3 w-3" />
                   <SelectValue />
                 </SelectTrigger>

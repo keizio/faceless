@@ -1,61 +1,48 @@
 import { db } from "../db/index";
 import { generationJobs, users } from "../db/schema";
-import { eq, and, gte, count, sql } from "drizzle-orm";
-import { CONTENT_LIMITS } from "@faceless/shared";
+import { eq, and, count, sql } from "drizzle-orm";
 
 export class UsageService {
-  async getDailyGenerationCount(userId: string): Promise<number> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const [result] = await db
-      .select({ count: count() })
-      .from(generationJobs)
-      .where(
-        and(
-          eq(generationJobs.userId, userId),
-          gte(generationJobs.createdAt, today),
-        ),
-      );
-
-    return result?.count ?? 0;
-  }
-
-  async checkGenerationLimit(userId: string): Promise<{ allowed: boolean; remaining: number; limit: number }> {
+  async getCredits(userId: string): Promise<number> {
     const [user] = await db
-      .select({ plan: users.plan })
+      .select({ credits: users.credits })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
-    const plan = user?.plan ?? "free";
-    const dailyLimit = plan === "pro" ? CONTENT_LIMITS.proPlanGenerationsPerDay : CONTENT_LIMITS.freePlanGenerationsPerDay;
+    return user?.credits ?? 0;
+  }
 
-    const used = await this.getDailyGenerationCount(userId);
-    const remaining = Math.max(0, dailyLimit - used);
+  async checkGenerationLimit(userId: string, cost: number): Promise<{ allowed: boolean; credits: number; cost: number }> {
+    const credits = await this.getCredits(userId);
 
     return {
-      allowed: remaining > 0,
-      remaining,
-      limit: dailyLimit,
+      allowed: credits >= cost,
+      credits,
+      cost,
     };
   }
 
+  async deductCredits(userId: string, cost: number): Promise<void> {
+    const [result] = await db
+      .update(users)
+      .set({ credits: sql`${users.credits} - ${cost}` })
+      .where(and(eq(users.id, userId), sql`${users.credits} >= ${cost}`))
+      .returning({ credits: users.credits });
+
+    if (!result) {
+      throw new Error("Insufficient credits");
+    }
+  }
+
   async getStats(userId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const [user] = await db
+      .select({ credits: users.credits })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
 
-    const [dailyResult] = await db
-      .select({ count: count() })
-      .from(generationJobs)
-      .where(
-        and(
-          eq(generationJobs.userId, userId),
-          gte(generationJobs.createdAt, today),
-        ),
-      );
-
-    const generatedToday = dailyResult?.count ?? 0;
+    const credits = user?.credits ?? 0;
 
     const [totalResult] = await db
       .select({ count: count() })
@@ -77,6 +64,6 @@ export class UsageService {
     const failedJobs = failedResult?.count ?? 0;
     const successRate = totalJobs > 0 ? Math.round(((totalJobs - failedJobs) / totalJobs) * 100) : 100;
 
-    return { generatedToday, successRate, totalJobs, failedJobs };
+    return { credits, successRate, totalJobs, failedJobs };
   }
 }

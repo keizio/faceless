@@ -11,6 +11,5 @@ statsRoutes.get("/", async (c) => {
   const userId = c.get("userId");
   const service = new UsageService();
   const stats = await service.getStats(userId);
-  const limit = await service.checkGenerationLimit(userId);
-  return c.json({ ...stats, ...limit });
+  return c.json(stats);
 });

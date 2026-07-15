@@ -32,6 +32,7 @@ import {
   Loader2,
   Check,
   Upload,
+  ChevronLeft,
 } from "lucide-react";
 
 const SPEECH_STYLES = Object.keys(SPEECH_STYLE_LABELS);
@@ -51,6 +52,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
   const [gender, setGender] = useState("");
   const [speechStyle, setSpeechStyle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [portraitUrl, setPortraitUrl] = useState("");
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -61,6 +63,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
     setGender(avatar.gender || "");
     setSpeechStyle(avatar.speechStyle || "");
     setImageUrl(avatar.referenceImageUrl || "");
+    setPortraitUrl(avatar.portraitUrl || "");
   }, [avatar]);
 
   useEffect(() => {
@@ -77,6 +80,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
         gender: gender || undefined,
         speechStyle: speechStyle || undefined,
         referenceImageUrl: imageUrl || undefined,
+        portraitUrl: portraitUrl || undefined,
       },
     );
   };
@@ -112,119 +116,111 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
       <DashboardLayout>
         <div className="animate-fade-in">
           {isLoading ? (
-            <div className="space-y-4">
-              <div className="skeleton h-8 w-64 rounded-lg bg-muted" />
-              <div className="skeleton h-4 w-48 rounded-lg bg-muted" />
-              <div className="skeleton h-64 w-full rounded-lg bg-muted" />
+            <div className="space-y-3">
+              <div className="skeleton h-6 w-48 rounded-lg bg-muted" />
+              <div className="skeleton h-48 w-full rounded-lg bg-muted" />
             </div>
           ) : avatar ? (
             <>
-              {/* Header */}
-              <div className="mb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <h1 className="text-2xl font-bold text-foreground">
-                    {avatar.name}
-                  </h1>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={handleGenerate}
-                      disabled={generateAvatar.isPending || (!!activeJobId && !avatar?.characterSheetUrl)}
-                    >
-                      {generateAvatar.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="mr-2 h-4 w-4" />
-                      )}
-                      Generate Character Sheet
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+              <div className="mb-4 flex items-center gap-3">
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => router.push("/avatars")}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <h1 className="text-lg font-bold text-foreground truncate">
+                  {avatar.name}
+                </h1>
+                <div className="ml-auto flex items-center gap-1.5">
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={generateAvatar.isPending || (!!activeJobId && !avatar?.characterSheetUrl)}
+                    size="sm"
+                    className="h-8 text-xs"
+                  >
+                    {generateAvatar.isPending ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-1 h-3 w-3" />
+                    )}
+                    Generate
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                    onClick={() => setShowDeleteConfirm(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
 
-              {/* Two-column layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                {/* Left: Preview & Character Sheet */}
-                <div className="lg:col-span-2 space-y-6 lg:sticky lg:top-0 lg:self-start">
-                  {/* Avatar preview */}
-                  <Card className="depth-3 border-border/50">
-                    <CardContent className="p-5">
-                      <div className="flex flex-col sm:flex-row items-start gap-6">
-                        <div className="flex h-16 w-16 sm:h-24 sm:w-24 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-[hsl(var(--accent-secondary))]/20 float-3d">
-                          {avatar.portraitUrl || avatar.referenceImageUrl ? (
-                            <img
-                              src={avatar.portraitUrl ?? avatar.referenceImageUrl ?? ""}
-                              alt={avatar.name}
-                              className="h-16 w-16 sm:h-24 sm:w-24 rounded-xl object-cover"
-                            />
-                          ) : (
-                            <User className="h-8 w-8 text-primary" />
-                          )}
-                        </div>
-                        <div className="flex-1 space-y-2 min-w-0">
-                          {avatar.characterSheetUrl && (
-                            <div className="flex items-center gap-2 text-sm text-[hsl(var(--success))]">
-                              <Check className="h-4 w-4" />
-                              Character sheet generated
-                            </div>
-                          )}
-                          {avatar.speechStyle && (
-                            <p className="text-sm text-muted-foreground">
-                              <span className="text-muted-foreground/70">Speech style:</span>{" "}
-                              {SPEECH_STYLE_LABELS[avatar.speechStyle as keyof typeof SPEECH_STYLE_LABELS] || avatar.speechStyle}
-                            </p>
-                          )}
-                          {(avatar.age || avatar.gender) && (
-                            <p className="text-sm text-muted-foreground">
-                              <span className="text-muted-foreground/70">Profile:</span>{" "}
-                              {[getAgeRangeLabel(avatar.age), avatar.gender].filter(Boolean).join(", ")}
-                            </p>
-                          )}
-                        </div>
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                <div className="lg:col-span-2 space-y-4">
+                  <Card className="border-border/50 overflow-hidden">
+                    <div className="flex items-start gap-3 p-3">
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/10 to-[hsl(var(--accent-secondary))]/10 overflow-hidden">
+                        {avatar.portraitUrl || avatar.referenceImageUrl ? (
+                          <img
+                            src={avatar.portraitUrl ?? avatar.referenceImageUrl ?? ""}
+                            alt={avatar.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <User className="h-6 w-6 text-muted-foreground/40" />
+                        )}
                       </div>
-                    </CardContent>
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <p className="text-sm font-medium text-foreground truncate">{avatar.name}</p>
+                        {(avatar.age || avatar.gender) && (
+                          <p className="text-xs text-muted-foreground/70">
+                            {[getAgeRangeLabel(avatar.age), avatar.gender].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
+                        {avatar.speechStyle && (
+                          <p className="text-xs text-muted-foreground/70">
+                            {SPEECH_STYLE_LABELS[avatar.speechStyle as keyof typeof SPEECH_STYLE_LABELS] || avatar.speechStyle}
+                          </p>
+                        )}
+                        {avatar.characterSheetUrl && (
+                          <p className="flex items-center gap-1 text-xs text-[hsl(var(--success))]">
+                            <Check className="h-3 w-3" />
+                            Character sheet ready
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </Card>
 
-                  {/* Generation progress */}
                   {activeJobId && (
                     <GenerationProgress jobId={activeJobId} />
                   )}
 
-                  {/* Character sheet */}
                   {avatar.characterSheetUrl && (
-                    <Card className="glass depth-2 border-border/50">
-                      <CardContent className="p-5">
-                        <h2 className="mb-3 text-sm font-semibold text-foreground">
-                          <Sparkles className="mr-2 inline h-4 w-4 text-primary" />
+                    <Card className="border-border/50">
+                      <CardContent className="p-3">
+                        <p className="mb-2 text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <Sparkles className="h-3 w-3 text-primary" />
                           Character Sheet
-                        </h2>
+                        </p>
                         <img
                           src={avatar.characterSheetUrl}
                           alt={`${avatar.name} character sheet`}
-                          className="w-full max-w-2xl rounded-lg"
+                          className="w-full rounded-md"
                         />
                       </CardContent>
                     </Card>
                   )}
                 </div>
 
-                {/* Right: Edit form */}
                 <div className="lg:col-span-3">
                   <Card className="border-border/50">
-                    <CardContent className="p-4 sm:p-5">
-                      <h2 className="mb-3 text-sm font-semibold text-foreground">
+                    <CardContent className="p-3.5">
+                      <h2 className="mb-3 text-xs font-semibold text-foreground uppercase tracking-wider text-muted-foreground/70">
                         Edit Avatar
                       </h2>
-                      <div className="space-y-3.5">
+                      <div className="space-y-2.5">
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                          <label className="mb-0.5 block text-xs font-medium text-muted-foreground">
                             Name
                           </label>
                           <Input
@@ -232,16 +228,16 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Avatar name"
-                            className="h-9"
+                            className="h-8 text-sm"
                           />
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                            <label className="mb-0.5 block text-xs font-medium text-muted-foreground">
                               Age Range
                             </label>
                             <Select value={age} onValueChange={(v) => v && setAge(v)}>
-                              <SelectTrigger>
+                              <SelectTrigger className="h-8 text-sm">
                                 <SelectValue placeholder="Age" />
                               </SelectTrigger>
                               <SelectContent>
@@ -254,11 +250,11 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                             </Select>
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                            <label className="mb-0.5 block text-xs font-medium text-muted-foreground">
                               Gender
                             </label>
                             <Select value={gender} onValueChange={(v) => v && setGender(v)}>
-                              <SelectTrigger>
+                              <SelectTrigger className="h-8 text-sm">
                                 <SelectValue placeholder="Gender" />
                               </SelectTrigger>
                               <SelectContent>
@@ -271,11 +267,11 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                             </Select>
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                            <label className="mb-0.5 block text-xs font-medium text-muted-foreground">
                               Speech Style
                             </label>
                             <Select value={speechStyle} onValueChange={(v) => v && setSpeechStyle(v)}>
-                              <SelectTrigger>
+                              <SelectTrigger className="h-8 text-sm">
                                 <SelectValue placeholder="Style" />
                               </SelectTrigger>
                               <SelectContent>
@@ -289,16 +285,16 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                           </div>
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                          <label className="mb-0.5 block text-xs font-medium text-muted-foreground">
                             Reference Image
                           </label>
-                          <div className="flex gap-2">
+                          <div className="flex gap-1.5">
                             <Input
                               type="url"
                               value={imageUrl}
                               onChange={(e) => setImageUrl(e.target.value)}
                               placeholder="https://cdn.solutip.com/..."
-                              className="flex-1 h-9 text-sm"
+                              className="flex-1 h-8 text-sm"
                             />
                             <input
                               type="file"
@@ -310,24 +306,42 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                             <Button
                               variant="outline"
                               size="icon"
-                              className="h-9 w-9 shrink-0"
+                              className="h-8 w-8 shrink-0"
                               onClick={() => fileInputRef.current?.click()}
                               disabled={uploadAvatarImage.isPending}
                               title="Upload image"
                             >
                               {uploadAvatarImage.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <Upload className="h-4 w-4" />
+                                <Upload className="h-3.5 w-3.5" />
                               )}
                             </Button>
                           </div>
                         </div>
-                        <div className="flex justify-end gap-3 pt-1">
+                        <div>
+                          <label className="mb-0.5 block text-xs font-medium text-muted-foreground">
+                            Portrait Image URL <span className="text-muted-foreground/50">(optional)</span>
+                          </label>
+                          <Input
+                            type="url"
+                            value={portraitUrl}
+                            onChange={(e) => setPortraitUrl(e.target.value)}
+                            placeholder="https://cdn.solutip.com/..."
+                            className="h-8 text-sm"
+                          />
+                          {avatar.portraitUrl && portraitUrl !== avatar.portraitUrl && (
+                            <p className="mt-0.5 text-[11px] text-muted-foreground/50">
+                              Set to override the AI-generated portrait
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex justify-end gap-2 pt-1">
                           <Button
                             onClick={handleSave}
                             disabled={updateAvatar.isPending || !name.trim() || uploadAvatarImage.isPending}
                             size="sm"
+                            className="h-8 text-xs"
                           >
                             {updateAvatar.isPending ? "Saving..." : "Save"}
                           </Button>
@@ -338,7 +352,6 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
 
-              {/* Delete confirm dialog */}
               <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
                 <DialogContent className="sm:max-w-sm">
                   <DialogHeader>
@@ -348,8 +361,8 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                     </DialogDescription>
                   </DialogHeader>
                   <div className="flex justify-end gap-3 pt-2">
-                    <Button onClick={() => setShowDeleteConfirm(false)} variant="outline">Cancel</Button>
-                    <Button onClick={() => { handleDelete(); setShowDeleteConfirm(false); }} variant="destructive" disabled={deleteAvatar.isPending}>
+                    <Button onClick={() => setShowDeleteConfirm(false)} variant="outline" size="sm">Cancel</Button>
+                    <Button onClick={() => { handleDelete(); setShowDeleteConfirm(false); }} variant="destructive" size="sm" disabled={deleteAvatar.isPending}>
                       {deleteAvatar.isPending ? "Deleting..." : "Delete"}
                     </Button>
                   </div>
@@ -357,11 +370,11 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
               </Dialog>
             </>
           ) : (
-            <Card className="flex flex-col items-center py-12 text-center border-border/50">
+            <Card className="flex flex-col items-center py-8 text-center border-border/50">
               <CardContent>
-                <p className="text-muted-foreground">Avatar not found.</p>
+                <p className="text-sm text-muted-foreground">Avatar not found.</p>
                 <Link href="/avatars">
-                  <Button className="mt-4">Go to Avatars</Button>
+                  <Button className="mt-3" size="sm">Go to Avatars</Button>
                 </Link>
               </CardContent>
             </Card>
