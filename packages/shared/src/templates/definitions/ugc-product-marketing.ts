@@ -19,6 +19,15 @@ export const ugcProductMarketingTemplate: ContentTemplate = {
       placeholder: "e.g., Glow Serum Pro",
     },
     {
+      id: "productImage",
+      label: "Product Image (optional)",
+      type: "file",
+      required: false,
+      accept: "image/*",
+      maxSize: 10 * 1024 * 1024,
+      placeholder: "Upload a photo of the product (PNG, JPG, WebP, max 10MB)",
+    },
+    {
       id: "productDescription",
       label: "Product Description",
       type: "textarea",

@@ -37,6 +37,7 @@ function buildUgcProductMarketingPrompts(inputs: Record<string, unknown>): Templ
   const productDescription = inputs.productDescription as string ?? "";
   const keyFeatures = (inputs.keyFeatures as string[]) ?? [];
   const tone = inputs.tone as string ?? "enthusiastic";
+  const productImage = inputs.productImage as string | undefined;
 
   const toneMap: Record<string, string> = {
     enthusiastic: "energetic, excited, genuine amazement",
@@ -48,6 +49,10 @@ function buildUgcProductMarketingPrompts(inputs: Record<string, unknown>): Templ
   const featuresList = keyFeatures.length > 0
     ? `Key features to highlight: ${keyFeatures.join(", ")}`
     : "Highlight the most compelling product benefits naturally";
+
+  const imageReference = productImage
+    ? `\n\nA product image has been provided by the user. Use it as the primary visual reference: ${productImage}`
+    : "";
 
   return {
     systemPrompt: `You are a UGC (User Generated Content) creator making authentic product marketing content.
@@ -65,7 +70,7 @@ CRITICAL RULES:
 - Include a clear call-to-action
 - Never use fake statistics or follower counts
 - Never include social media handles`,
-    visualGuidance: `Lifestyle product photography style. Show the product in a real-life context — hands holding it, it on a desk, in a bathroom, being used naturally. Warm, inviting lighting. The product should be the hero but feel organic, not staged. Avoid stock-photo aesthetics.`,
+    visualGuidance: `Lifestyle product photography style. Show the product in a real-life context — hands holding it, it on a desk, in a bathroom, being used naturally. Warm, inviting lighting. The product should be the hero but feel organic, not staged. Avoid stock-photo aesthetics.${imageReference}`,
     negativeAdditions: [
       "stock photo",
       "generic product shot",
@@ -252,6 +257,15 @@ function buildSplitScreenPrompts(inputs: Record<string, unknown>): TemplatePromp
   const leftDescription = inputs.leftDescription as string ?? "";
   const rightDescription = inputs.rightDescription as string ?? "";
   const orientation = inputs.orientation as string ?? "horizontal";
+  const leftImage = inputs.leftImage as string | undefined;
+  const rightImage = inputs.rightImage as string | undefined;
+
+  const leftSource = leftImage
+    ? `\n\nUser-provided left image (use as-is): ${leftImage}`
+    : `\n\nLeft panel description: ${leftDescription}`;
+  const rightSource = rightImage
+    ? `\n\nUser-provided right image (use as-is): ${rightImage}`
+    : `\n\nRight panel description: ${rightDescription}`;
 
   return {
     systemPrompt: `You are creating a split-screen comparison visual for social media.
@@ -266,7 +280,7 @@ RULES:
 - The contrast between panels should be clear
 - Both panels should work at half the full image size
 - Never include text in the generated images`,
-    visualGuidance: `Generate two visually distinct but stylistically cohesive images. Left: ${leftDescription}. Right: ${rightDescription}. Each image will occupy half the final composition. Ensure both work well at reduced width/height.`,
+    visualGuidance: `Generate two visually distinct but stylistically cohesive images.${leftSource}${rightSource}${!leftImage && !rightImage ? `\n\nEach image will occupy half the final composition. Ensure both work well at reduced width/height.` : ""}`,
     negativeAdditions: [
       "text",
       "words",

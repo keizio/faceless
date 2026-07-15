@@ -49,6 +49,8 @@ export const aiMusicVideo: ContentTemplate = {
       label: "Audio File",
       type: "file",
       required: false,
+      accept: "audio/*",
+      maxSize: 10 * 1024 * 1024,
       placeholder: "MP3, WAV, or OGG (max 10MB)",
     },
   ],

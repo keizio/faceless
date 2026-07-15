@@ -17,15 +17,18 @@ import {
   CheckCircle,
   Plus,
   ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import { useTemplates } from "@/hooks/useTemplates";
 import { TemplateCard } from "@/components/templates/TemplateCard";
+import { CreateContentForm } from "@/components/CreateContentForm";
 
 export default function DashboardPage() {
   const { data: projects, isLoading } = useProjects();
   const { data: templates } = useTemplates();
   const createProject = useCreateProject();
   const [showForm, setShowForm] = useState(false);
+  const [showCreateContent, setShowCreateContent] = useState(false);
   const [name, setName] = useState("");
 
   const handleCreate = () => {
@@ -53,11 +56,30 @@ export default function DashboardPage() {
                 Welcome back to your content studio
               </p>
             </div>
-            <Button onClick={() => setShowForm(!showForm)} className="shrink-0">
-              <Plus className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">New Project</span>
-              <span className="sm:hidden">New</span>
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                onClick={() => {
+                  setShowCreateContent(!showCreateContent);
+                  if (!showCreateContent) setShowForm(false);
+                }}
+                variant="ghost"
+                className={"text-primary"}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">Create Content</span>
+                <span className="sm:hidden">Content</span>
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowForm(!showForm);
+                  if (!showForm) setShowCreateContent(false);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">New Project</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            </div>
           </div>
 
           {/* Stats cards */}
@@ -122,6 +144,13 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Create content form */}
+          {showCreateContent && (
+            <div className="animate-slide-in">
+              <CreateContentForm onSuccess={() => setShowCreateContent(false)} />
+            </div>
           )}
 
           {/* Templates */}

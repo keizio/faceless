@@ -11,8 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Loader2, Upload, Image as ImageIcon } from "lucide-react";
 import type { ContentTemplate, TemplateInputField } from "@faceless/shared";
+import { api } from "@/lib/api";
 
 interface TemplateFormProps {
   template: ContentTemplate;
@@ -130,35 +131,136 @@ function TemplateField({
       return <ArrayField field={field} value={value as string[] | undefined} onChange={(v) => onChange(v)} />;
 
     case "file":
-      return (
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-            {field.label}
-            {field.required && <span className="text-red-500 ml-0.5">*</span>}
-          </label>
-          <Input
-            type="file"
-            accept="audio/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                onChange({ name: file.name, size: file.size, type: file.type });
-              }
-              e.target.value = "";
-            }}
-            className="h-8 text-sm"
-          />
-          {field.placeholder && (
-            <p className="mt-1 text-[11px] text-muted-foreground/70">
-              {field.placeholder}
-            </p>
-          )}
-        </div>
-      );
+      return <FileUploadField field={field} value={value as string | undefined} onChange={(v) => onChange(v)} />;
 
     default:
       return null;
   }
+}
+
+function FileUploadField({
+  field,
+  value,
+  onChange,
+}: {
+  field: TemplateInputField;
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isImage = field.accept?.includes("image");
+  const uploadEndpoint = isImage ? "/api/upload/image" : "/api/upload/audio";
+
+  const validateFile = (file: File): string | null => {
+    if (field.accept && field.accept !== "*/*") {
+      const allowedPatterns = field.accept.split(",").map((p) => p.trim());
+      const matches = allowedPatterns.some((pattern) => {
+        if (pattern.endsWith("/*")) {
+          const category = pattern.replace("/*", "");
+          return file.type.startsWith(category + "/");
+        }
+        return file.type === pattern;
+      });
+      if (!matches) {
+        return `Invalid file type. Accepted: ${field.accept}`;
+      }
+    }
+    if (field.maxSize && file.size > field.maxSize) {
+      const maxMB = Math.round(field.maxSize / (1024 * 1024));
+      return `File too large. Maximum size is ${maxMB}MB.`;
+    }
+    return null;
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validationError = validateFile(file);
+    if (validationError) {
+      setError(validationError);
+      e.target.value = "";
+      return;
+    }
+
+    setError(null);
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await api.post(uploadEndpoint, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      onChange(data.url);
+    } catch {
+      setError("Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleRemove = () => {
+    onChange(undefined);
+    setError(null);
+  };
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+        {field.label}
+        {field.required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+
+      {value ? (
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/50 text-xs">
+          {isImage ? (
+            <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <Upload className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span className="flex-1 truncate text-muted-foreground">
+            File uploaded
+          </span>
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <Input
+            type="file"
+            accept={field.accept ?? "*/*"}
+            onChange={handleFileSelect}
+            disabled={uploading}
+            className="h-8 text-sm"
+          />
+          {uploading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-md">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="mt-1 text-[11px] text-red-500">{error}</p>
+      )}
+
+      {field.placeholder && !value && (
+        <p className="mt-1 text-[11px] text-muted-foreground/70">
+          {field.placeholder}
+        </p>
+      )}
+    </div>
+  );
 }
 
 function ArrayField({

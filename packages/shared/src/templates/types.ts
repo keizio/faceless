@@ -34,6 +34,8 @@ export interface TemplateInputField {
   max?: number;
   defaultValue?: unknown;
   itemSchema?: TemplateItemField[];
+  accept?: string;
+  maxSize?: number;
 }
 
 export interface ContentTemplate {

@@ -516,6 +516,17 @@ const saveImageVersionStep = createStep({
       })
       .returning();
 
+    for (const url of inputData.compositedImageUrls) {
+      await db.insert(mediaAssets).values({
+        userId: inputData.userId,
+        contentId: inputData.contentId,
+        type: "image",
+        url,
+        provider: "composite",
+        metadata: { source: "composite-template" },
+      });
+    }
+
     await db
       .update(contents)
       .set({ status: "ready" })
