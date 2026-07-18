@@ -1,17 +1,25 @@
 import { db } from "../db";
 import { avatars, generationJobs } from "../db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { CREDIT_COSTS } from "@faceless/shared";
 import { enqueueAvatarGeneration } from "../queues/avatar-generation.js";
 import { UsageService } from "./usage.js";
 
 export class AvatarService {
-  async listAvatars(userId: string) {
-    return db
+  async listAvatars(userId: string, limit = 50, offset = 0) {
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(avatars)
+      .where(eq(avatars.userId, userId));
+    const total = totalResult?.count ?? 0;
+    const items = await db
       .select()
       .from(avatars)
       .where(eq(avatars.userId, userId))
-      .orderBy(desc(avatars.createdAt));
+      .orderBy(desc(avatars.createdAt))
+      .limit(limit)
+      .offset(offset);
+    return { avatars: items, total };
   }
 
   async getAvatar(userId: string, id: string) {
@@ -135,6 +143,7 @@ export class AvatarService {
       userId,
       avatarId,
       customPrompt: resolvedCustomPrompt,
+      cost,
     });
 
     return { job, avatar };

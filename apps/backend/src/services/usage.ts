@@ -35,6 +35,13 @@ export class UsageService {
     }
   }
 
+  async refundCredits(userId: string, cost: number): Promise<void> {
+    await db
+      .update(users)
+      .set({ credits: sql`${users.credits} + ${cost}` })
+      .where(eq(users.id, userId));
+  }
+
   async getStats(userId: string) {
     const [user] = await db
       .select({ credits: users.credits })

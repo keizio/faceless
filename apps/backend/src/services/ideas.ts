@@ -1,54 +1,21 @@
 import { db } from "../db/index";
-import { ideas, users } from "../db/schema";
-import { eq, and } from "drizzle-orm";
-import { cacheGet, cacheSet } from "../lib/cache";
+import { ideas } from "../db/schema";
+import { eq, desc, count, sql } from "drizzle-orm";
 import { mastra } from "../mastra/index";
-import type { Idea } from "@faceless/shared";
+import { UsageService } from "./usage";
+import { CREDIT_COSTS } from "@faceless/shared";
+import type { Idea, IdeaItem } from "@faceless/shared";
 
-const CACHE_NAMESPACE = "ideas";
+const usageService = new UsageService();
+
 const MAX_RETRIES = 2;
 
-function todayDate(): string {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-}
-
-export async function getIdeas(language: string, date?: string): Promise<Idea[]> {
-  const targetDate = date ?? todayDate();
-
-  const cached = await cacheGet<Idea[]>(CACHE_NAMESPACE, language, targetDate);
-  if (cached) return cached;
-
-  const rows = await db
-    .select()
-    .from(ideas)
-    .where(and(eq(ideas.language, language), eq(ideas.date, targetDate)))
-    .orderBy(ideas.createdAt);
-
-  const result: Idea[] = rows.map((row) => ({
-    id: row.id,
-    language: row.language,
-    date: row.date,
-    topic: row.topic,
-    description: row.description,
-    hashtags: (row.hashtags ?? []) as string[],
-    contentType: row.contentType as Idea["contentType"],
-    platform: row.platform as Idea["platform"],
-    sourceUrl: row.sourceUrl,
-    createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
-  }));
-
-  await cacheSet<Idea[]>(CACHE_NAMESPACE, result, 86_400, language, targetDate);
-  return result;
-}
-
-interface RawTrendItem {
+interface RawIdeaItem {
   topic: string;
   description: string;
   hashtags: string[];
   contentType: string;
   platform: string;
-  sourceUrl: string;
 }
 
 function extractJson(text: string): string {
@@ -62,103 +29,125 @@ function extractJson(text: string): string {
   return text.trim();
 }
 
-async function generateIdeasViaAgent(language: string): Promise<RawTrendItem[]> {
+function parseIdeaItems(text: string): RawIdeaItem[] {
+  const jsonStr = extractJson(text);
+  const parsed = JSON.parse(jsonStr) as RawIdeaItem[];
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error("Agent returned empty or invalid array");
+  }
+  return parsed;
+}
+
+function validateIdeaItem(item: RawIdeaItem): IdeaItem {
+  return {
+    topic: item.topic ?? "",
+    description: (item.description ?? "").slice(0, 300),
+    hashtags: Array.isArray(item.hashtags) ? item.hashtags.slice(0, 8) : [],
+    contentType: ["image", "slide", "video", "text"].includes(item.contentType)
+      ? (item.contentType as IdeaItem["contentType"])
+      : "image",
+    platform: ["tiktok", "instagram", "facebook", "twitter", "generic"].includes(item.platform)
+      ? (item.platform as IdeaItem["platform"])
+      : "generic",
+  };
+}
+
+async function generateIdeasViaAgent(prompt: string, language: string): Promise<IdeaItem[]> {
   const agent = mastra.getAgent("ideaGenerator");
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await agent.generate(
-        `Generate 15 trending social media content ideas for the language: "${language}". 
-Research current trending topics, viral content, and popular hashtags in this language/region.
-Make sure all ideas are relevant to this language and its cultural context.
+        `Generate 10 content ideas for niche: "${prompt}" in language: "${language}".
+Make sure all ideas are relevant to this niche and language.
 Return ONLY valid JSON array — no markdown, no code fences, no explanation.`,
       );
 
       const text = (response as { text: string }).text;
 
       if (!text) {
-        console.warn(`[ideas] Agent returned empty response for language "${language}" (attempt ${attempt + 1})`);
+        console.warn(`[ideas] Agent returned empty response (attempt ${attempt + 1})`);
         continue;
       }
 
-      const jsonStr = extractJson(text);
-      const parsed = JSON.parse(jsonStr) as RawTrendItem[];
-
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        console.warn(`[ideas] Agent returned empty array for language "${language}" (attempt ${attempt + 1})`);
-        continue;
-      }
-
-      return parsed.slice(0, 15).map((item) => ({
-        topic: item.topic ?? "",
-        description: (item.description ?? "").slice(0, 300),
-        hashtags: Array.isArray(item.hashtags) ? item.hashtags.slice(0, 8) : [],
-        contentType: ["image", "slide", "video", "text"].includes(item.contentType) ? item.contentType : "image",
-        platform: ["tiktok", "instagram", "facebook", "twitter", "generic"].includes(item.platform) ? item.platform : "generic",
-        sourceUrl: item.sourceUrl ?? "",
-      }));
+      const parsed = parseIdeaItems(text);
+      return parsed.slice(0, 10).map(validateIdeaItem);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[ideas] Agent generation failed for language "${language}" (attempt ${attempt + 1}): ${errMsg}`);
-      if (attempt === MAX_RETRIES) throw new Error(`Failed to generate ideas via agent after retries: ${errMsg}`);
+      console.error(`[ideas] Agent generation failed (attempt ${attempt + 1}): ${errMsg}`);
+      if (attempt === MAX_RETRIES) throw new Error(`Failed to generate ideas: ${errMsg}`);
     }
   }
 
-  return [];
+  throw new Error("Failed to generate ideas after retries");
 }
 
-export async function generateIdeasForLanguage(language: string): Promise<void> {
-  const targetDate = todayDate();
+export async function getUserIdeas(
+  userId: string,
+  limit = 20,
+  offset = 0,
+): Promise<{ ideas: Idea[]; total: number }> {
+  const clampedLimit = Math.min(Math.max(limit, 1), 50);
 
-  const existing = await db
-    .select({ id: ideas.id })
-    .from(ideas)
-    .where(and(eq(ideas.language, language), eq(ideas.date, targetDate)))
-    .limit(1);
+  const [rows, totalResult] = await Promise.all([
+    db
+      .select()
+      .from(ideas)
+      .where(eq(ideas.userId, userId))
+      .orderBy(desc(ideas.createdAt))
+      .limit(clampedLimit)
+      .offset(offset),
+    db
+      .select({ count: count() })
+      .from(ideas)
+      .where(eq(ideas.userId, userId)),
+  ]);
 
-  if (existing.length > 0) return;
-
-  const items = await generateIdeasViaAgent(language);
-
-  if (items.length === 0) return;
-
-  const values = items.map((item) => ({
-    language,
-    date: targetDate,
-    topic: item.topic,
-    description: item.description,
-    hashtags: item.hashtags,
-    contentType: item.contentType,
-    platform: item.platform,
-    sourceUrl: item.sourceUrl,
-  }));
-
-  await db.insert(ideas).values(values);
+  return {
+    ideas: rows.map((row) => ({
+      id: row.id,
+      userId: row.userId,
+      prompt: row.prompt,
+      language: row.language,
+      ideas: (row.ideas ?? []) as IdeaItem[],
+      createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
+    })),
+    total: totalResult[0]?.count ?? 0,
+  };
 }
 
-export async function generateAllIdeas(): Promise<{ languages: string[]; count: number }> {
-  const rows = await db
-    .select({ language: ideas.language })
-    .from(ideas)
-    .groupBy(ideas.language);
+export async function generateIdeas(
+  userId: string,
+  prompt: string,
+  language: string,
+): Promise<Idea> {
+  const cost = CREDIT_COSTS.idea;
 
-  const distinctLanguages = rows.map((r) => r.language);
-  const userLanguages = await db
-    .select({ language: users.language })
-    .from(users);
-  const languages = [
-    ...new Set([
-      ...userLanguages.map((r) => r.language),
-      ...distinctLanguages,
-      "en",
-    ]),
-  ];
-
-  let total = 0;
-  for (const lang of languages) {
-    await generateIdeasForLanguage(lang);
-    total++;
+  const { allowed } = await usageService.checkGenerationLimit(userId, cost);
+  if (!allowed) {
+    throw new Error("Insufficient credits");
   }
 
-  return { languages, count: total };
+  const items = await generateIdeasViaAgent(prompt, language);
+
+  const [row] = await db
+    .insert(ideas)
+    .values({
+      userId,
+      prompt,
+      language,
+      ideas: items,
+    })
+    .returning();
+
+  await usageService.deductCredits(userId, cost);
+
+  return {
+    id: row.id,
+    userId: row.userId,
+    prompt: row.prompt,
+    language: row.language,
+    ideas: (row.ideas ?? []) as IdeaItem[],
+    createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
+  };
 }

@@ -1,4 +1,4 @@
-import type { BrandKit } from "@faceless/shared";
+import type { BrandKit, IdeaItem } from "@faceless/shared";
 import {
   pgTable,
   uuid,
@@ -106,8 +106,7 @@ export const contents = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     projectId: uuid("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
+      .references(() => projects.id, { onDelete: "set null" }),
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -202,18 +201,17 @@ export const ideas = pgTable(
   "ideas",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    prompt: text("prompt").notNull(),
     language: text("language").notNull(),
-    date: text("date").notNull(),
-    topic: text("topic").notNull(),
-    description: text("description"),
-    hashtags: jsonb("hashtags").$type<string[]>().default([]).notNull(),
-    contentType: text("content_type"),
-    platform: text("platform"),
-    sourceUrl: text("source_url"),
+    ideas: jsonb("ideas").$type<IdeaItem[]>().notNull().default([]),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("ideas_lang_date_idx").on(table.language, table.date),
+    index("ideas_user_idx").on(table.userId),
+    index("ideas_user_created_idx").on(table.userId, table.createdAt),
   ],
 );
 

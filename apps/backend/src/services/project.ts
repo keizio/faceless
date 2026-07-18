@@ -55,6 +55,7 @@ export class ProjectService {
         }
 
         for (const rc of recentContents) {
+          if (!rc.projectId) continue;
           const url = firstMediaPerContent.get(rc.contentId);
           if (url) {
             const list = thumbnailsByProject.get(rc.projectId) ?? [];

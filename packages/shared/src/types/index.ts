@@ -57,7 +57,7 @@ export interface Avatar {
 
 export interface Content {
   id: string;
-  projectId: string;
+  projectId: string | null;
   userId: string;
   avatarId: string | null;
   type: ContentType;
@@ -159,15 +159,19 @@ export interface CreateAvatarRequest {
   referenceImageUrl?: string;
 }
 
+export interface IdeaItem {
+  topic: string;
+  description: string;
+  hashtags: string[];
+  contentType: ContentType;
+  platform: Platform;
+}
+
 export interface Idea {
   id: string;
+  userId: string;
+  prompt: string;
   language: string;
-  date: string;
-  topic: string;
-  description: string | null;
-  hashtags: string[];
-  contentType: ContentType | null;
-  platform: Platform | null;
-  sourceUrl: string | null;
+  ideas: IdeaItem[];
   createdAt: string;
 }

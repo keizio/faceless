@@ -1,1 +1,0 @@
-ALTER TABLE "projects" ADD COLUMN "brand_kit" jsonb DEFAULT '{}'::jsonb;

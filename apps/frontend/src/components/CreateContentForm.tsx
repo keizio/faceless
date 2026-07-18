@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Image, Presentation, Video, FileText, Sparkles, ChevronDown, User, Folder } from "lucide-react";
+import { Image, Presentation, Video, FileText, Sparkles, ChevronDown, User } from "lucide-react";
 
 const CONTENT_TYPES = [
   { value: "image", label: "Image", icon: Image },
@@ -85,7 +85,7 @@ export function CreateContentForm({ onSuccess, initialValues }: CreateContentFor
   const [slideCount, setSlideCount] = useState(3);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const createContent = useCreateContent(projectId);
+  const createContent = useCreateContent(projectId || null);
 
   useEffect(() => {
     if (userProfile?.language) {
@@ -103,12 +103,6 @@ export function CreateContentForm({ onSuccess, initialValues }: CreateContentFor
     }
   }, [initialValues?.type, initialValues?.prompt, initialValues?.platform]);
 
-  useEffect(() => {
-    if (projects && projects.length === 1 && !projectId) {
-      setProjectId(projects[0].id);
-    }
-  }, [projects, projectId]);
-
   const platformSpecs = PLATFORM_SPECS[platform as keyof typeof PLATFORM_SPECS];
   const aspectRatios = platformSpecs?.aspectRatios ?? ["16:9"];
 
@@ -120,7 +114,7 @@ export function CreateContentForm({ onSuccess, initialValues }: CreateContentFor
   };
 
   const handleCreate = () => {
-    if (!projectId || !prompt || !type) return;
+    if (!prompt || !type) return;
     createContent.mutate(
       {
         type,
@@ -151,26 +145,6 @@ export function CreateContentForm({ onSuccess, initialValues }: CreateContentFor
     );
   };
 
-  if (!projects || projects.length === 0) {
-    return (
-      <Card className="glass depth-2 border-border/50">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex flex-col items-center justify-center py-6 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-              <Folder className="h-6 w-6 text-primary" />
-            </div>
-            <h3 className="mb-1 text-sm font-semibold text-foreground">
-              Create a project first
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              You need at least one project to create content
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card className="glass depth-2 border-border/50">
       <CardContent className="p-4 sm:p-5">
@@ -187,14 +161,14 @@ export function CreateContentForm({ onSuccess, initialValues }: CreateContentFor
             </label>
             <Select 
               value={projectId} 
-              onValueChange={(v) => v && setProjectId(v)}
-              disabled={projects.length === 1}
+              onValueChange={(v) => setProjectId(v ?? "")}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select a project" />
+                <SelectValue placeholder="No project" />
               </SelectTrigger>
               <SelectContent>
-                {projects.map((project: { id: string; name: string }) => (
+                <SelectItem value="">No project</SelectItem>
+                {projects?.map((project: { id: string; name: string }) => (
                   <SelectItem key={project.id} value={project.id}>
                     {project.name}
                   </SelectItem>
@@ -376,7 +350,7 @@ export function CreateContentForm({ onSuccess, initialValues }: CreateContentFor
           {/* Submit */}
           <Button
             onClick={handleCreate}
-            disabled={!projectId || !prompt || !type || createContent.isPending}
+            disabled={!prompt || !type || createContent.isPending}
             className="w-full mt-1"
           >
             {createContent.isPending ? (

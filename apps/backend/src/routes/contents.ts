@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { verifyFirebaseToken } from "../middleware/auth";
+import { validate } from "../middleware/validate";
 import { ContentService } from "../services/content";
+import { createContentSchema } from "@faceless/shared";
+import type { CreateContentInput } from "@faceless/shared";
+import { z } from "zod";
 import type { AppEnv } from "../app";
 
 export const contentRoutes = new Hono<AppEnv>();
@@ -11,9 +15,31 @@ contentRoutes.get("/", async (c) => {
   const userId = c.get("userId");
   const limit = Math.min(Number(c.req.query("limit")) || 50, 100);
   const offset = Number(c.req.query("offset")) || 0;
+  const projectIdParam = c.req.query("projectId");
+  let projectIdFilter: string | null | undefined;
+  if (projectIdParam === "null") {
+    projectIdFilter = null;
+  } else if (projectIdParam) {
+    projectIdFilter = projectIdParam;
+  }
   const service = new ContentService();
-  const { contents, total } = await service.listAllContents(userId, limit, offset);
+  const { contents, total } = await service.listAllContents(userId, limit, offset, projectIdFilter);
   return c.json({ contents, total, limit, offset });
+});
+
+const createContentWithProjectSchema = createContentSchema.extend({
+  projectId: z.string().uuid().optional(),
+});
+
+contentRoutes.post("/", validate(createContentWithProjectSchema), async (c) => {
+  const userId = c.get("userId");
+  const data = c.get("validated") as CreateContentInput & { projectId?: string };
+  const service = new ContentService();
+  const result = await service.createContent(userId, data.projectId ?? null, {
+    ...data,
+    slideCount: data.slideCount,
+  });
+  return c.json(result, 201);
 });
 
 contentRoutes.get("/:id", async (c) => {

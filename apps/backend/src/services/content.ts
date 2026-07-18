@@ -1,15 +1,16 @@
 import { db } from "../db/index.js";
 import { contents, contentVersions, generationJobs, mediaAssets } from "../db/schema.js";
-import { eq, and, inArray, desc, sql } from "drizzle-orm";
+import { eq, and, inArray, desc, sql, isNull } from "drizzle-orm";
 import { enqueueContentGeneration } from "../queues/content-generation.js";
 import { CREDIT_COSTS } from "@faceless/shared";
 import { UsageService } from "./usage.js";
-import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { getR2Client } from "../lib/storage.js";
 
 export class ContentService {
   async createContent(
     userId: string,
-    projectId: string,
+    projectId: string | null,
     data: {
       type: "image" | "slide" | "video" | "text";
       platform: string;
@@ -32,7 +33,7 @@ export class ContentService {
     const [content] = await db
       .insert(contents)
       .values({
-        projectId,
+        projectId: projectId ?? undefined,
         userId,
         avatarId: data.avatarId ?? null,
         type: data.type,
@@ -44,7 +45,7 @@ export class ContentService {
         templateId: data.templateId ?? null,
         templateInputs: data.templateInputs ?? null,
         status: "queued",
-      })
+      } as any)
       .returning();
 
     const [job] = await db
@@ -72,6 +73,7 @@ export class ContentService {
       slideCount: data.slideCount,
       templateId: data.templateId,
       templateInputs: data.templateInputs,
+      cost,
     });
 
     return { content, job };
@@ -108,18 +110,26 @@ export class ContentService {
     return { ...content, versions, media, latestJobId: latestJob?.id ?? null };
   }
 
-  async listAllContents(userId: string, limit = 50, offset = 0) {
+  async listAllContents(userId: string, limit = 50, offset = 0, projectId?: string | null) {
+    const conditions = [eq(contents.userId, userId)];
+    if (projectId === null) {
+      conditions.push(isNull(contents.projectId));
+    } else if (projectId !== undefined) {
+      conditions.push(eq(contents.projectId, projectId));
+    }
+    const whereClause = and(...conditions);
+
     const [totalResult] = await db
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(contents)
-      .where(eq(contents.userId, userId));
+      .where(whereClause);
 
     const total = totalResult?.count ?? 0;
 
     const allContents = await db
       .select()
       .from(contents)
-      .where(eq(contents.userId, userId))
+      .where(whereClause)
       .orderBy(desc(contents.createdAt))
       .limit(limit)
       .offset(offset);
@@ -218,14 +228,7 @@ export class ContentService {
       .from(mediaAssets)
       .where(eq(mediaAssets.contentId, contentId));
 
-    const r2Client = new S3Client({
-      region: "auto",
-      endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
-      },
-    });
+    const r2Client = getR2Client();
 
     const cdnBase = process.env.R2_PUBLIC_URL || "https://cdn.solutip.com";
     for (const asset of assets) {

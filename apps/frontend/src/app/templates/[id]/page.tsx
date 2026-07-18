@@ -61,13 +61,7 @@ export default function TemplateDetailPage({
     if (userProfile?.language) setSelectedLanguage(userProfile.language);
   }, [userProfile]);
 
-  useEffect(() => {
-    if (projects && projects.length > 0 && !selectedProjectId) {
-      setSelectedProjectId(projects[0].id);
-    }
-  }, [projects, selectedProjectId]);
-
-  const createContent = useCreateContent(selectedProjectId);
+  const createContent = useCreateContent(selectedProjectId || null);
 
   if (isLoading) {
     return (
@@ -125,8 +119,6 @@ export default function TemplateDetailPage({
   };
 
   const handleCreate = () => {
-    if (!selectedProjectId) return;
-
     const prompt = buildPrompt();
     createContent.mutate(
       {
@@ -187,12 +179,13 @@ export default function TemplateDetailPage({
                     </label>
                     <Select
                       value={selectedProjectId}
-                      onValueChange={(v) => v && setSelectedProjectId(v)}
+                      onValueChange={(v) => setSelectedProjectId(v ?? "")}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a project" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">No project</SelectItem>
                         {projects?.map(
                           (project: { id: string; name: string }) => (
                             <SelectItem key={project.id} value={project.id}>
@@ -325,9 +318,7 @@ export default function TemplateDetailPage({
 
                   <Button
                     onClick={handleCreate}
-                    disabled={
-                      !selectedProjectId || createContent.isPending
-                    }
+                    disabled={createContent.isPending}
                     className="w-full"
                   >
                     {createContent.isPending ? (

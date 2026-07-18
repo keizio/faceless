@@ -3,13 +3,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
-export function useAllContents(limit?: number, offset?: number) {
+export function useAllContents(limit?: number, offset?: number, projectId?: string | null) {
   return useQuery({
-    queryKey: ["contents", { limit, offset }],
+    queryKey: ["contents", { limit, offset, projectId }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (limit) params.set("limit", String(limit));
       if (offset) params.set("offset", String(offset));
+      if (projectId === null) {
+        params.set("projectId", "null");
+      } else if (projectId) {
+        params.set("projectId", projectId);
+      }
       const { data } = await api.get(`/api/contents?${params.toString()}`);
       return { contents: data.contents, total: data.total };
     },
@@ -27,7 +32,7 @@ export function useContent(id: string) {
   });
 }
 
-export function useCreateContent(projectId: string) {
+export function useCreateContent(projectId?: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: {
@@ -42,15 +47,22 @@ export function useCreateContent(projectId: string) {
       templateId?: string;
       templateInputs?: Record<string, unknown>;
     }) => {
-      const { data } = await api.post(
-        `/api/projects/${projectId}/contents`,
-        body,
-      );
+      if (projectId) {
+        const { data } = await api.post(
+          `/api/projects/${projectId}/contents`,
+          body,
+        );
+        return data;
+      }
+      const { data } = await api.post(`/api/contents`, body);
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["projects", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: ["projects", projectId] });
+        queryClient.invalidateQueries({ queryKey: ["projects"] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["contents"] });
     },
   });
 }
@@ -76,6 +88,7 @@ export function useDeleteContent() {
       return data;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contents"] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
   });
@@ -98,6 +111,7 @@ export function useDuplicateContent() {
       return data;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contents"] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
   });

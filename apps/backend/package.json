@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n api,worker,cron -c cyan,magenta,yellow \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\" \"tsx watch src/cron.ts\"",
+    "dev": "concurrently -n api,worker -c cyan,magenta \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\"",
     "dev:worker": "tsx watch src/worker.ts",
-    "dev:cron": "tsx watch src/cron.ts",
+    
     "build": "tsc",
     "start": "node dist/index.js",
     "start:worker": "node dist/worker.js",

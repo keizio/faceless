@@ -4,7 +4,7 @@ import { randomUUID, randomBytes } from "node:crypto";
 const CDN_BASE = process.env.R2_PUBLIC_URL || "https://cdn.solutip.com";
 const BUCKET = process.env.R2_BUCKET_NAME || "faceless-media";
 
-function getR2Client() {
+export function getR2Client() {
   return new S3Client({
     region: "auto",
     endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,

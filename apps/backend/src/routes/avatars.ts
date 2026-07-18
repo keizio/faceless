@@ -13,9 +13,11 @@ avatarRoutes.use("*", verifyFirebaseToken);
 
 avatarRoutes.get("/", async (c) => {
   const userId = c.get("userId");
+  const limit = Math.min(Number(c.req.query("limit")) || 50, 100);
+  const offset = Number(c.req.query("offset")) || 0;
   const service = new AvatarService();
-  const avatars = await service.listAvatars(userId);
-  return c.json({ avatars });
+  const result = await service.listAvatars(userId, limit, offset);
+  return c.json(result);
 });
 
 avatarRoutes.post("/", validate(createAvatarSchema), async (c) => {

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { runContentPipeline } from "../agents/pipeline.js";
 import { mastra } from "../mastra/index.js";
 import type { GenerationJobPayload } from "../lib/queue.js";
+import { UsageService } from "../services/usage.js";
 
 type JobHandler = (payload: GenerationJobPayload) => Promise<void>;
 
@@ -26,6 +27,10 @@ async function handleContentGeneration(
       .update(generationJobs)
       .set({ status: "failed", error: errMsg, completedAt: new Date() })
       .where(eq(generationJobs.id, jobId));
+    if (payload.cost) {
+      const usageService = new UsageService();
+      await usageService.refundCredits(payload.userId, payload.cost);
+    }
     throw error;
   }
 }
@@ -58,6 +63,10 @@ async function handleAvatarGeneration(
       .update(generationJobs)
       .set({ status: "failed", error: errMsg, completedAt: new Date() })
       .where(eq(generationJobs.id, jobId));
+    if (payload.cost) {
+      const usageService = new UsageService();
+      await usageService.refundCredits(payload.userId, payload.cost);
+    }
     throw error;
   }
 }

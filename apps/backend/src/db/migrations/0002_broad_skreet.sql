@@ -1,1 +1,0 @@
-ALTER TABLE "contents" ADD COLUMN "language" text DEFAULT 'en' NOT NULL;

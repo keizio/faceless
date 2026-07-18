@@ -35,6 +35,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/ideas", label: "Ideas", icon: Lightbulb },
+  { href: "/contents", label: "Contents", icon: FileText },
   { href: "/projects", label: "Projects", icon: Folder },
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/avatars", label: "Avatars", icon: User },

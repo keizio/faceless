@@ -6,8 +6,8 @@ const redisConnection = getRedisConnection();
 export const generationQueue = new Queue("generation", {
   connection: redisConnection as any,
   defaultJobOptions: {
-    attempts: 1,
-    backoff: undefined,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 2000 },
     removeOnComplete: true,
     removeOnFail: false,
   },
@@ -40,6 +40,7 @@ export interface GenerationJobPayload {
   customPrompt?: string;
   templateId?: string;
   templateInputs?: Record<string, unknown>;
+  cost?: number;
 }
 
 export { redisConnection };

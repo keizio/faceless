@@ -5,71 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1784036261752,
-      "tag": "0000_perpetual_wind_dancer",
+      "when": 1784302653220,
+      "tag": "0000_stiff_shinobi_shaw",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1784038783658,
-      "tag": "0001_amusing_the_santerians",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1784039704265,
-      "tag": "0002_broad_skreet",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1784042122115,
-      "tag": "0003_mysterious_steve_rogers",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1784052633137,
-      "tag": "0004_lazy_blue_blade",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1784079935973,
-      "tag": "0005_mighty_microchip",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1784104480406,
-      "tag": "0006_living_ben_parker",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1784109937220,
-      "tag": "0007_orange_preak",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1784131180129,
-      "tag": "0008_bright_dorian_gray",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1784131960037,
-      "tag": "0009_military_catseye",
+      "when": 1784304156737,
+      "tag": "0001_shiny_spyke",
       "breakpoints": true
     }
   ]

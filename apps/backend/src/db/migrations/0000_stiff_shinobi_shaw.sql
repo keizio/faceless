@@ -2,6 +2,22 @@ CREATE TYPE "public"."content_status" AS ENUM('draft', 'queued', 'generating', '
 CREATE TYPE "public"."content_type" AS ENUM('image', 'slide', 'video', 'text');--> statement-breakpoint
 CREATE TYPE "public"."job_status" AS ENUM('pending', 'active', 'completed', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."platform" AS ENUM('tiktok', 'instagram', 'facebook', 'twitter', 'generic');--> statement-breakpoint
+CREATE TYPE "public"."speech_style" AS ENUM('formal', 'casual', 'humorous', 'professional', 'friendly', 'persuasive', 'inspirational', 'educational');--> statement-breakpoint
+CREATE TABLE "avatars" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" text NOT NULL,
+	"name" text NOT NULL,
+	"age" integer,
+	"gender" text,
+	"speech_style" "speech_style",
+	"reference_image_url" text,
+	"character_sheet_url" text,
+	"portrait_url" text,
+	"metadata" jsonb DEFAULT '{}'::jsonb,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "content_versions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"content_id" uuid NOT NULL,
@@ -16,12 +32,17 @@ CREATE TABLE "contents" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"project_id" uuid NOT NULL,
 	"user_id" text NOT NULL,
+	"avatar_id" uuid,
 	"type" "content_type" NOT NULL,
 	"platform" "platform" DEFAULT 'generic' NOT NULL,
+	"aspect_ratio" text,
+	"language" text DEFAULT 'en' NOT NULL,
 	"status" "content_status" DEFAULT 'draft' NOT NULL,
 	"title" text,
 	"prompt" text NOT NULL,
 	"script" text,
+	"template_id" text,
+	"template_inputs" jsonb,
 	"metadata" jsonb DEFAULT '{}'::jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
@@ -29,7 +50,8 @@ CREATE TABLE "contents" (
 --> statement-breakpoint
 CREATE TABLE "generation_jobs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"content_id" uuid NOT NULL,
+	"content_id" uuid,
+	"avatar_id" uuid,
 	"user_id" text NOT NULL,
 	"job_type" text NOT NULL,
 	"status" "job_status" DEFAULT 'pending' NOT NULL,
@@ -38,6 +60,15 @@ CREATE TABLE "generation_jobs" (
 	"error" text,
 	"started_at" timestamp,
 	"completed_at" timestamp,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "ideas" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" text NOT NULL,
+	"prompt" text NOT NULL,
+	"language" text NOT NULL,
+	"ideas" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -52,11 +83,23 @@ CREATE TABLE "media_assets" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "notifications" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" text NOT NULL,
+	"type" text NOT NULL,
+	"title" text NOT NULL,
+	"message" text NOT NULL,
+	"link" text,
+	"read" boolean DEFAULT false NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "projects" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text NOT NULL,
 	"name" text NOT NULL,
 	"description" text,
+	"brand_kit" jsonb DEFAULT '{}'::jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
@@ -66,24 +109,36 @@ CREATE TABLE "users" (
 	"email" text NOT NULL,
 	"name" text,
 	"plan" text DEFAULT 'free' NOT NULL,
+	"language" text DEFAULT 'en' NOT NULL,
+	"credits" integer DEFAULT 1000 NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "avatars" ADD CONSTRAINT "avatars_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "content_versions" ADD CONSTRAINT "content_versions_content_id_contents_id_fk" FOREIGN KEY ("content_id") REFERENCES "public"."contents"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contents" ADD CONSTRAINT "contents_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contents" ADD CONSTRAINT "contents_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "contents" ADD CONSTRAINT "contents_avatar_id_avatars_id_fk" FOREIGN KEY ("avatar_id") REFERENCES "public"."avatars"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "generation_jobs" ADD CONSTRAINT "generation_jobs_content_id_contents_id_fk" FOREIGN KEY ("content_id") REFERENCES "public"."contents"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "generation_jobs" ADD CONSTRAINT "generation_jobs_avatar_id_avatars_id_fk" FOREIGN KEY ("avatar_id") REFERENCES "public"."avatars"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "generation_jobs" ADD CONSTRAINT "generation_jobs_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ideas" ADD CONSTRAINT "ideas_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "media_assets" ADD CONSTRAINT "media_assets_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "media_assets" ADD CONSTRAINT "media_assets_content_id_contents_id_fk" FOREIGN KEY ("content_id") REFERENCES "public"."contents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "avatars_user_idx" ON "avatars" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "versions_content_idx" ON "content_versions" USING btree ("content_id");--> statement-breakpoint
 CREATE INDEX "contents_project_idx" ON "contents" USING btree ("project_id");--> statement-breakpoint
 CREATE INDEX "contents_user_idx" ON "contents" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "contents_template_idx" ON "contents" USING btree ("template_id");--> statement-breakpoint
 CREATE INDEX "jobs_content_idx" ON "generation_jobs" USING btree ("content_id");--> statement-breakpoint
 CREATE INDEX "jobs_user_idx" ON "generation_jobs" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "jobs_status_idx" ON "generation_jobs" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "ideas_user_idx" ON "ideas" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "ideas_user_created_idx" ON "ideas" USING btree ("user_id","created_at");--> statement-breakpoint
 CREATE INDEX "media_user_idx" ON "media_assets" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "media_content_idx" ON "media_assets" USING btree ("content_id");--> statement-breakpoint
+CREATE INDEX "notifications_user_idx" ON "notifications" USING btree ("user_id","created_at");--> statement-breakpoint
 CREATE INDEX "projects_user_idx" ON "projects" USING btree ("user_id");

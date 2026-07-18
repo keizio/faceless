@@ -7,6 +7,10 @@ const MAX_GENERATION_REQUESTS = 10;
 
 const GENERATION_PATHS = ["/api/projects/", "/api/avatars/"];
 
+function normalizePath(path: string): string {
+  return path.replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "/:id");
+}
+
 function isGenerationPath(path: string): boolean {
   return GENERATION_PATHS.some((p) => path.startsWith(p) && (path.endsWith("/contents") || path.endsWith("/generate")));
 }
@@ -17,7 +21,7 @@ export async function rateLimiter(c: Context, next: Next) {
   const maxReqs = isGenerationPath(path) ? MAX_GENERATION_REQUESTS : MAX_REQUESTS;
 
   const redis = getRedis();
-  const key = `ratelimit:${userId}:${path}`;
+  const key = `ratelimit:${userId}:${normalizePath(path)}`;
   const now = Date.now();
   const windowStart = now - WINDOW_MS;
 

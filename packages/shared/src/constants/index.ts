@@ -58,6 +58,7 @@ export const CREDIT_COSTS = {
   slide: 3,
   video: 5,
   avatar: 2,
+  idea: 2,
 } as const;
 
 export const CONTENT_LIMITS = {

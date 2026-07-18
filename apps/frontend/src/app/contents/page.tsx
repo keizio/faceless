@@ -23,7 +23,7 @@ const STATUS_OPTIONS = ["all", "completed", "failed", "generating", "queued"] as
 const SORT_OPTIONS = ["newest", "oldest"] as const;
 
 export default function ContentsPage() {
-  const { data: contentsData, isLoading } = useAllContents();
+  const { data: contentsData, isLoading } = useAllContents(undefined, undefined, null);
   const contents = contentsData?.contents;
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -59,8 +59,8 @@ export default function ContentsPage() {
       <DashboardLayout>
         <div className="animate-fade-in space-y-6">
           <PageHeader
-            title="All Content"
-            subtitle={`${filtered.length} content items across all projects`}
+            title="Contents"
+            subtitle={`${filtered.length} content items without a project`}
           />
 
           {/* Filter bar */}
@@ -78,7 +78,7 @@ export default function ContentsPage() {
               <div className="flex items-center gap-1.5">
                 <ListFilter className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Select value={typeFilter} onValueChange={(v) => v && setTypeFilter(v)}>
-                  <SelectTrigger className="h-9 w-[110px] text-xs">
+                  <SelectTrigger className="h-9 w-[110px] text-xs text-primary">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -91,7 +91,7 @@ export default function ContentsPage() {
                 </Select>
               </div>
               <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
-                <SelectTrigger className="h-9 w-[120px] text-xs">
+                <SelectTrigger className="h-9 w-[120px] text-xs text-primary">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -103,7 +103,7 @@ export default function ContentsPage() {
                 </SelectContent>
               </Select>
               <Select value={sort} onValueChange={(v) => v && setSort(v)}>
-                <SelectTrigger className="h-9 w-[120px] text-xs">
+                <SelectTrigger className="h-9 w-[120px] text-xs text-primary">
                   <ArrowUpDown className="mr-1.5 h-3 w-3" />
                   <SelectValue />
                 </SelectTrigger>
@@ -129,7 +129,7 @@ export default function ContentsPage() {
             <EmptyState
               icon={<FileText className="h-8 w-8 text-primary" />}
               title="No content found"
-              description={search || typeFilter !== "all" || statusFilter !== "all" ? "Try adjusting your filters or search query" : "Create content from any project to see it here"}
+              description={search || typeFilter !== "all" || statusFilter !== "all" ? "Try adjusting your filters or search query" : "Create content without assigning it to a project to see it here"}
               action={
                 !search && typeFilter === "all" && statusFilter === "all" ? (
                   <a href="/dashboard" className="text-sm text-primary hover:underline">
