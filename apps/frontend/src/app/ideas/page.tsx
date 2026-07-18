@@ -248,7 +248,7 @@ function IdeasPage() {
                   disabled={generateIdeas.isPending}
                 />
               </div>
-              <div className="w-full sm:w-44">
+              <div className="flex">
                 <Select value={language} onValueChange={(v) => v && setLanguage(v)} disabled={generateIdeas.isPending}>
                   <SelectTrigger>
                     <SelectValue />
@@ -262,7 +262,8 @@ function IdeasPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button
+            </div>
+            <Button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || generateIdeas.isPending}
                 className="gap-2 min-w-[140px]"
@@ -279,7 +280,6 @@ function IdeasPage() {
                   </>
                 )}
               </Button>
-            </div>
           </div>
         </CardContent>
       </Card>
