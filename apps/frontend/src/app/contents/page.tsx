@@ -144,6 +144,7 @@ export default function ContentsPage() {
                 (content: {
                   id: string;
                   title: string | null;
+                  prompt: string | null;
                   type: string;
                   platform: string;
                   status: string;
@@ -154,6 +155,7 @@ export default function ContentsPage() {
                     key={content.id}
                     id={content.id}
                     title={content.title}
+                    prompt={content.prompt}
                     type={content.type}
                     platform={content.platform}
                     status={content.status}

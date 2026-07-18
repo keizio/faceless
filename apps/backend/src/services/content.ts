@@ -265,6 +265,108 @@ export class ContentService {
     return version?.outputUrl ?? null;
   }
 
+  async saveTextLayers(userId: string, contentId: string, versionId: string, textLayers: Record<string, unknown[]>) {
+    const [content] = await db
+      .select({ id: contents.id })
+      .from(contents)
+      .where(and(eq(contents.id, contentId), eq(contents.userId, userId)))
+      .limit(1);
+
+    if (!content) throw new Error("Content not found");
+
+    const [version] = await db
+      .select({ id: contentVersions.id, metadata: contentVersions.metadata })
+      .from(contentVersions)
+      .innerJoin(contents, eq(contentVersions.contentId, contents.id))
+      .where(
+        and(
+          eq(contents.userId, userId),
+          eq(contentVersions.contentId, contentId),
+          eq(contentVersions.id, versionId),
+        ),
+      )
+      .limit(1);
+
+    if (!version) throw new Error("Version not found");
+
+    const existingMetadata = (version.metadata as Record<string, unknown>) || {};
+    const updatedMetadata = { ...existingMetadata, textLayers };
+
+    await db
+      .update(contentVersions)
+      .set({ metadata: updatedMetadata })
+      .where(eq(contentVersions.id, versionId));
+
+    return { textLayers };
+  }
+
+  async getTextLayers(userId: string, contentId: string, versionId: string) {
+    const [version] = await db
+      .select({ metadata: contentVersions.metadata })
+      .from(contentVersions)
+      .innerJoin(contents, eq(contentVersions.contentId, contents.id))
+      .where(
+        and(
+          eq(contents.userId, userId),
+          eq(contentVersions.contentId, contentId),
+          eq(contentVersions.id, versionId),
+        ),
+      )
+      .limit(1);
+
+    if (!version) throw new Error("Version not found");
+
+    const metadata = (version.metadata as Record<string, unknown>) || {};
+    return { textLayers: metadata.textLayers ?? {} };
+  }
+
+  async createEditorVersion(
+    userId: string,
+    contentId: string,
+    imageUrls: string[],
+    textLayers: Record<string, unknown[]>,
+  ) {
+    const [content] = await db
+      .select()
+      .from(contents)
+      .where(and(eq(contents.id, contentId), eq(contents.userId, userId)))
+      .limit(1);
+
+    if (!content) throw new Error("Content not found");
+
+    const [maxVersion] = await db
+      .select({ versionNumber: contentVersions.versionNumber })
+      .from(contentVersions)
+      .where(eq(contentVersions.contentId, contentId))
+      .orderBy(desc(contentVersions.versionNumber))
+      .limit(1);
+
+    const nextVersionNumber = (maxVersion?.versionNumber ?? 0) + 1;
+
+    const [newVersion] = await db
+      .insert(contentVersions)
+      .values({
+        contentId,
+        versionNumber: nextVersionNumber,
+        outputUrl: imageUrls[0],
+        thumbnailUrl: imageUrls[0],
+        metadata: { textLayers },
+      })
+      .returning();
+
+    for (const url of imageUrls) {
+      await db.insert(mediaAssets).values({
+        userId,
+        contentId,
+        type: "image",
+        url,
+        metadata: { source: "editor-export" },
+      });
+    }
+
+    return { version: newVersion };
+  }
+
   async duplicateContent(
     userId: string,
     contentId: string,

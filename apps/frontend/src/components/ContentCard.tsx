@@ -15,6 +15,7 @@ const TYPE_ICONS: Record<string, typeof Image> = {
 interface ContentCardProps {
   id: string;
   title: string | null;
+  prompt?: string | null;
   type: string;
   platform: string;
   status: string;
@@ -25,12 +26,14 @@ interface ContentCardProps {
 export function ContentCard({
   id,
   title,
+  prompt,
   type,
   platform,
   status,
   createdAt,
   thumbnailUrl,
 }: ContentCardProps) {
+  const displayTitle = title || (prompt ? prompt.slice(0, 50) + (prompt.length > 50 ? "..." : "") : "Untitled");
   const TypeIcon = TYPE_ICONS[type] || FileText;
 
   return (
@@ -44,7 +47,7 @@ export function ContentCard({
             <div className="relative aspect-[9/16] overflow-hidden rounded-t-lg bg-muted">
               <img
                 src={thumbnailUrl}
-                alt={title || "Untitled"}
+                alt={displayTitle}
                 className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent" />
@@ -64,7 +67,7 @@ export function ContentCard({
           )}
           <div className="p-4 pt-3">
             <h3 className="font-medium text-foreground truncate">
-              {title || "Untitled"}
+              {displayTitle}
             </h3>
             <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground/70 flex-wrap">
               <span className="capitalize">{type}</span>

@@ -2,8 +2,8 @@ import { Hono } from "hono";
 import { verifyFirebaseToken } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { ContentService } from "../services/content";
-import { createContentSchema } from "@faceless/shared";
-import type { CreateContentInput } from "@faceless/shared";
+import { createContentSchema, saveTextLayersSchema, editorExportSchema } from "@faceless/shared";
+import type { CreateContentInput, SaveTextLayersInput, EditorExportInput } from "@faceless/shared";
 import { z } from "zod";
 import type { AppEnv } from "../app";
 
@@ -87,6 +87,36 @@ contentRoutes.post("/:id/duplicate", async (c) => {
   }
   const service = new ContentService();
   const result = await service.duplicateContent(userId, id, language);
+  return c.json(result, 201);
+});
+
+contentRoutes.get("/:id/text-layers", async (c) => {
+  const userId = c.get("userId");
+  const contentId = c.req.param("id")!;
+  const versionId = c.req.query("versionId");
+  if (!versionId) {
+    return c.json({ error: "versionId is required" }, 400);
+  }
+  const service = new ContentService();
+  const result = await service.getTextLayers(userId, contentId, versionId);
+  return c.json(result);
+});
+
+contentRoutes.patch("/:id/text-layers", validate(saveTextLayersSchema), async (c) => {
+  const userId = c.get("userId");
+  const contentId = c.req.param("id")!;
+  const { versionId, textLayers } = c.get("validated") as SaveTextLayersInput;
+  const service = new ContentService();
+  const result = await service.saveTextLayers(userId, contentId, versionId, textLayers);
+  return c.json(result);
+});
+
+contentRoutes.post("/:id/editor-export", validate(editorExportSchema), async (c) => {
+  const userId = c.get("userId");
+  const contentId = c.req.param("id")!;
+  const { imageUrls, textLayers } = c.get("validated") as EditorExportInput;
+  const service = new ContentService();
+  const result = await service.createEditorVersion(userId, contentId, imageUrls, textLayers);
   return c.json(result, 201);
 });
 

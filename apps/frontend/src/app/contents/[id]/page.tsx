@@ -43,6 +43,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Download,
+  PenTool,
 } from "lucide-react";
 
 const TYPE_ICONS: Record<string, typeof Image> = {
@@ -101,7 +102,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                 {/* Header info */}
                 <div>
                   <h1 className="text-2xl font-bold text-foreground">
-                    {content.title || "Untitled Content"}
+                    {content.title || (content.prompt ? content.prompt.slice(0, 50) + (content.prompt.length > 50 ? "..." : "") : "Untitled Content")}
                   </h1>
                   <div className="mt-2 flex items-center gap-3 flex-wrap">
                     <Badge variant="outline" className="gap-1.5">
@@ -416,6 +417,14 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                 {/* Sticky actions */}
                 <div className="flex flex-col gap-3 lg:sticky lg:bottom-0 lg:bg-background py-4">
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    {(content.type === "image" || content.type === "slide") && content.status === "ready" && images.length > 0 && (
+                      <Link href={`/contents/${id}/editor`}>
+                        <Button variant="outline" className="text-primary w-full">
+                          <PenTool className="mr-2 h-4 w-4" />
+                          Edit Text
+                        </Button>
+                      </Link>
+                    )}
                     <Button
                       onClick={() => setShowConfirm(true)}
                       disabled={regenerate.isPending}

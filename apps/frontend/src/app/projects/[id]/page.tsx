@@ -142,6 +142,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           (content: {
                             id: string;
                             title: string | null;
+                            prompt: string | null;
                             type: string;
                             platform: string;
                             status: string;
@@ -152,6 +153,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                               key={content.id}
                               id={content.id}
                               title={content.title}
+                              prompt={content.prompt}
                               type={content.type}
                               platform={content.platform}
                               status={content.status}

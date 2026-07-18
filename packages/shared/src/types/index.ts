@@ -175,3 +175,26 @@ export interface Idea {
   ideas: IdeaItem[];
   createdAt: string;
 }
+
+export interface TextLayer {
+  id: string;
+  text: string;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: "normal" | "bold";
+  fontStyle: "normal" | "italic";
+  color: string;
+  textAlign: "left" | "center" | "right";
+  x: number;
+  y: number;
+  width: number;
+  originX: "left" | "center" | "right";
+  originY: "top" | "center" | "bottom";
+  angle: number;
+  opacity: number;
+  visible: boolean;
+  locked: boolean;
+  source: "ai" | "user";
+}
+
+export type TextLayerMap = Record<string, TextLayer[]>;

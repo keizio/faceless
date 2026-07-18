@@ -59,9 +59,43 @@ export const createAvatarSchema = z.object({
 
 export const updateAvatarSchema = createAvatarSchema.partial();
 
+export const textLayerSchema = z.object({
+  id: z.string().uuid(),
+  text: z.string(),
+  fontFamily: z.string().default("Inter"),
+  fontSize: z.number().min(8).max(200),
+  fontWeight: z.enum(["normal", "bold"]).default("normal"),
+  fontStyle: z.enum(["normal", "italic"]).default("normal"),
+  color: z.string().default("#ffffff"),
+  textAlign: z.enum(["left", "center", "right"]).default("center"),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().min(50),
+  originX: z.enum(["left", "center", "right"]).default("center"),
+  originY: z.enum(["top", "center", "bottom"]).default("center"),
+  angle: z.number().default(0),
+  opacity: z.number().min(0).max(1).default(1),
+  visible: z.boolean().default(true),
+  locked: z.boolean().default(false),
+  source: z.enum(["ai", "user"]).default("user"),
+});
+
+export const saveTextLayersSchema = z.object({
+  versionId: z.string().uuid(),
+  textLayers: z.record(z.array(textLayerSchema)),
+});
+
+export const editorExportSchema = z.object({
+  imageUrls: z.array(z.string().url()).min(1),
+  textLayers: z.record(z.array(textLayerSchema)),
+});
+
 export type CreateContentInput = z.infer<typeof createContentSchema>;
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type CreateAvatarInput = z.infer<typeof createAvatarSchema>;
 export type UpdateAvatarInput = z.infer<typeof updateAvatarSchema>;
 export type BrandKitInput = z.infer<typeof brandKitSchema>;
 export type BrandKitColorsInput = z.infer<typeof brandKitColorsSchema>;
+export type TextLayerInput = z.infer<typeof textLayerSchema>;
+export type SaveTextLayersInput = z.infer<typeof saveTextLayersSchema>;
+export type EditorExportInput = z.infer<typeof editorExportSchema>;
