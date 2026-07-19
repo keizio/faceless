@@ -1,0 +1,336 @@
+import type { TextProvider, GenerateTextOptions, ImageProvider, VideoProvider, AudioProvider, MusicProvider, AudioResult, GenerateVideoOptions } from "./types.js";
+import { uploadFile, randomFilename, downloadAndStoreImageUrl, downloadAndStoreVideoUrl, downloadAndStoreAudioUrl } from "../storage.js";
+
+const BASE_URL = process.env.REPLICATE_BASE_URL ?? "https://api.replicate.com/v1";
+
+const POLL_INTERVAL = 1_000;
+const MAX_POLL_TIME = 300_000;
+
+function getApiKey(): string {
+  const key = process.env.REPLICATE_API_KEY;
+  if (!key) throw new Error("REPLICATE_API_KEY not set");
+  return key;
+}
+
+function authHeaders() {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${getApiKey()}`,
+  };
+}
+
+async function submitReplicatePrediction(
+  model: string,
+  input: Record<string, unknown>,
+): Promise<string> {
+  const response = await fetch(`${BASE_URL}/predictions`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ version: model, input }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Replicate prediction API error: ${response.status} ${errorText}`);
+  }
+
+  const result = (await response.json()) as { id?: string };
+
+  if (!result.id) {
+    throw new Error(`Replicate returned no prediction id: ${JSON.stringify(result)}`);
+  }
+
+  return result.id;
+}
+
+async function pollReplicatePrediction(
+  predictionId: string,
+): Promise<{ output: unknown; metrics?: Record<string, unknown> }> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < MAX_POLL_TIME) {
+    const response = await fetch(`${BASE_URL}/predictions/${predictionId}`, {
+      headers: authHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Replicate poll error: ${response.status} ${errorText}`);
+    }
+
+    const result = (await response.json()) as {
+      status: string;
+      output?: unknown;
+      error?: string;
+      metrics?: { predict_time?: number };
+    };
+
+    if (result.status === "succeeded") {
+      return { output: result.output, metrics: result.metrics as Record<string, unknown> | undefined };
+    }
+
+    if (result.status === "failed") {
+      throw new Error(`Replicate prediction failed: ${result.error ?? "Unknown error"}`);
+    }
+
+    if (result.status === "canceled") {
+      throw new Error("Replicate prediction was canceled");
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+  }
+
+  throw new Error("Replicate prediction timed out");
+}
+
+export class ReplicateTextProvider implements TextProvider {
+  async generate(options: GenerateTextOptions): Promise<string> {
+    const messages: Record<string, unknown>[] = [];
+    if (options.system) {
+      messages.push({ role: "system", content: options.system });
+    }
+
+    const hasImages = options.images && options.images.length > 0;
+    if (hasImages) {
+      messages.push({
+        role: "user",
+        content: [
+          { type: "text", text: options.prompt },
+          ...options.images!.map((img) => ({
+            type: "image_url",
+            image_url: { url: img.url },
+          })),
+        ],
+      });
+    } else {
+      messages.push({ role: "user", content: options.prompt });
+    }
+
+    const model = process.env.AI_TEXT_MODEL;
+    if (!model) {
+      throw new Error("AI_TEXT_MODEL not set for Replicate text provider");
+    }
+
+    const response = await fetch(`${BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: options.maxTokens ?? 8192,
+        temperature: options.temperature ?? 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Replicate text API error: ${response.status} ${errorText}`);
+    }
+
+    const data = (await response.json()) as {
+      choices?: { message?: { content: string } }[];
+    };
+
+    return data.choices?.[0]?.message?.content ?? "";
+  }
+}
+
+export class ReplicateImageProvider implements ImageProvider {
+  async generate(
+    prompt: string,
+    size?: string,
+    model?: string,
+    options?: { negativePrompt?: string; qualityTags?: string[] },
+  ): Promise<string> {
+    let finalPrompt = prompt;
+    if (options?.qualityTags?.length) {
+      finalPrompt += `, ${options.qualityTags.join(", ")}`;
+    }
+
+    const resolvedModel = model ?? process.env.AI_IMAGE_MODEL;
+    if (!resolvedModel) {
+      throw new Error("AI_IMAGE_MODEL not set for Replicate image provider");
+    }
+
+    const input: Record<string, unknown> = { prompt: finalPrompt };
+
+    if (options?.negativePrompt) {
+      input.negative_prompt = options.negativePrompt;
+    }
+
+    if (size) {
+      const normalized = size.replace("*", "x");
+      const parts = normalized.split("x").map(Number);
+      if (parts.length === 2 && parts[0] && parts[1]) {
+        input.width = parts[0];
+        input.height = parts[1];
+      }
+    }
+
+    const predictionId = await submitReplicatePrediction(resolvedModel, input);
+    const { output } = await pollReplicatePrediction(predictionId);
+
+    const url = extractUrlFromOutput(output);
+
+    if (!url) {
+      throw new Error("No image generated by Replicate");
+    }
+
+    return downloadAndStoreImageUrl(url);
+  }
+
+  async inpaint(imageUrl: string, maskUrl: string, prompt?: string): Promise<string> {
+    const model = process.env.AI_IMAGE_MODEL;
+    if (!model) {
+      throw new Error("AI_IMAGE_MODEL not set for Replicate inpaint");
+    }
+
+    const input: Record<string, unknown> = {
+      image: imageUrl,
+      mask: maskUrl,
+      prompt: prompt ?? "Fill the masked area naturally",
+    };
+
+    const predictionId = await submitReplicatePrediction(model, input);
+    const { output } = await pollReplicatePrediction(predictionId);
+
+    const url = extractUrlFromOutput(output);
+
+    if (!url) {
+      throw new Error("No inpainted image generated by Replicate");
+    }
+
+    return downloadAndStoreImageUrl(url);
+  }
+}
+
+function extractUrlFromOutput(output: unknown): string | undefined {
+  if (typeof output === "string") {
+    return output;
+  }
+
+  if (Array.isArray(output)) {
+    if (output.length === 0) return undefined;
+    const first = output[0];
+    if (typeof first === "string") return first;
+    if (first && typeof first === "object" && "url" in (first as Record<string, unknown>)) {
+      return (first as Record<string, unknown>).url as string;
+    }
+    return undefined;
+  }
+
+  if (output && typeof output === "object") {
+    const obj = output as Record<string, unknown>;
+    if (typeof obj.url === "string") return obj.url;
+    if (typeof obj.output === "string") return obj.output;
+    if (Array.isArray(obj.output)) {
+      const first = obj.output[0];
+      if (typeof first === "string") return first;
+    }
+  }
+
+  return undefined;
+}
+
+export class ReplicateVideoProvider implements VideoProvider {
+  async generate(
+    sceneImages: { url: string; description: string }[],
+    storyboard: string,
+    _avatarReferenceImage?: string,
+    onProgress?: (completed: number, total: number) => void,
+    _options?: GenerateVideoOptions,
+  ): Promise<string[]> {
+    const model = process.env.AI_VIDEO_MODEL;
+    if (!model) {
+      throw new Error("AI_VIDEO_MODEL not set for Replicate video provider");
+    }
+
+    const videoUrls: string[] = [];
+
+    for (let i = 0; i < sceneImages.length; i++) {
+      const scene = sceneImages[i];
+      const videoPrompt = `${storyboard}\n\nScene ${i + 1}: ${scene.description}`;
+
+      const input: Record<string, unknown> = {
+        prompt: videoPrompt,
+        image: scene.url,
+      };
+
+      const predictionId = await submitReplicatePrediction(model, input);
+      const { output } = await pollReplicatePrediction(predictionId);
+
+      const videoUrl = extractUrlFromOutput(output);
+
+      if (!videoUrl) {
+        throw new Error(`Replicate video generation failed for scene ${i + 1}: no video URL in response`);
+      }
+
+      const storedUrl = await downloadAndStoreVideoUrl(videoUrl);
+      videoUrls.push(storedUrl);
+
+      onProgress?.(videoUrls.length, sceneImages.length);
+    }
+
+    return videoUrls;
+  }
+}
+
+export class ReplicateAudioProvider implements AudioProvider {
+  async generate(text: string, voice?: string): Promise<AudioResult> {
+    const model = process.env.AI_AUDIO_MODEL;
+    if (!model) {
+      throw new Error("AI_AUDIO_MODEL not set for Replicate audio provider");
+    }
+
+    const input: Record<string, unknown> = { text };
+
+    if (voice) {
+      input.voice = voice;
+    }
+
+    const predictionId = await submitReplicatePrediction(model, input);
+    const { output, metrics } = await pollReplicatePrediction(predictionId);
+
+    const audioUrl = extractUrlFromOutput(output);
+
+    if (!audioUrl) {
+      throw new Error("No audio generated by Replicate");
+    }
+
+    const storedUrl = await downloadAndStoreAudioUrl(audioUrl);
+    const predictTime = (metrics?.predict_time as number) ?? 0;
+    const durationMs = predictTime > 0 ? predictTime * 1000 : Math.round(text.length * 75);
+
+    return { url: storedUrl, durationMs };
+  }
+}
+
+export class ReplicateMusicProvider implements MusicProvider {
+  async generate(prompt: string, duration?: number): Promise<AudioResult> {
+    const model = process.env.AI_MUSIC_MODEL;
+    if (!model) {
+      throw new Error("AI_MUSIC_MODEL not set for Replicate music provider");
+    }
+
+    const input: Record<string, unknown> = { prompt };
+
+    if (duration) {
+      input.duration = Math.min(duration, 60);
+    }
+
+    const predictionId = await submitReplicatePrediction(model, input);
+    const { output, metrics } = await pollReplicatePrediction(predictionId);
+
+    const audioUrl = extractUrlFromOutput(output);
+
+    if (!audioUrl) {
+      throw new Error("No music generated by Replicate");
+    }
+
+    const storedUrl = await downloadAndStoreAudioUrl(audioUrl);
+    const predictTime = (metrics?.predict_time as number) ?? 0;
+    const durationMs = predictTime > 0 ? predictTime * 1000 : (duration ?? 30) * 1000;
+
+    return { url: storedUrl, durationMs };
+  }
+}

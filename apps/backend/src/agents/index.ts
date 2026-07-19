@@ -60,6 +60,27 @@ if (TEXT_PROVIDER === "dashscope") {
     apiKey: tokenData.access_token,
   });
   llm = googleVertex(TEXT_MODEL);
+} else if (TEXT_PROVIDER === "model-ark") {
+  const modelArk = createOpenAICompatible({
+    name: "model-ark",
+    baseURL: "https://ark.volces.com/api/v3",
+    apiKey: process.env.ARK_API_KEY ?? "",
+  });
+  llm = modelArk(TEXT_MODEL);
+} else if (TEXT_PROVIDER === "replicate") {
+  const replicate = createOpenAICompatible({
+    name: "replicate",
+    baseURL: "https://api.replicate.com/v1",
+    apiKey: process.env.REPLICATE_API_KEY ?? "",
+  });
+  llm = replicate(TEXT_MODEL);
+} else if (TEXT_PROVIDER === "local") {
+  const local = createOpenAICompatible({
+    name: "local",
+    baseURL: process.env.LOCAL_BASE_URL ?? "http://localhost:11434/v1",
+    apiKey: process.env.LOCAL_API_KEY ?? "",
+  });
+  llm = local(TEXT_MODEL);
 } else {
   const openrouter = createOpenAICompatible({
     name: "openrouter",

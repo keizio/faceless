@@ -1009,25 +1009,31 @@ const generateVoiceoverStep = createStep({
     const audioProvider = getProviders().audio;
 
     if (inputData.sceneNarrations.length > 0) {
-      const audioResults = await Promise.all(
+      const results = await Promise.all(
         inputData.sceneNarrations.map(async (narration) => {
-          const audioResult = await audioProvider.generate(narration);
-          return { narration, audioResult };
+          try {
+            const audioResult = await audioProvider.generate(narration);
+            return { ok: true as const, narration, audioResult };
+          } catch (error) {
+            console.warn(`[generateVoiceoverStep] TTS failed for narration: ${(error as Error).message}`);
+            return { ok: false as const, narration };
+          }
         }),
       );
 
       const sceneAudios: { url: string; durationMs: number }[] = [];
-      for (const { audioResult } of audioResults) {
-        sceneAudios.push({ url: audioResult.url, durationMs: audioResult.durationMs });
+      for (const result of results) {
+        if (!result.ok) continue;
+        sceneAudios.push({ url: result.audioResult.url, durationMs: result.audioResult.durationMs });
 
         await insertMediaAsset({
           userId: inputData.userId,
           contentId: inputData.contentId,
           type: "audio",
-          url: audioResult.url,
+          url: result.audioResult.url,
           provider: "dashscope",
           metadata: {
-            durationMs: audioResult.durationMs,
+            durationMs: result.audioResult.durationMs,
             source: "cosyvoice-tts",
             scene: sceneAudios.length,
           },
@@ -1036,7 +1042,7 @@ const generateVoiceoverStep = createStep({
 
       return {
         ...inputData,
-        sceneAudios,
+        sceneAudios: sceneAudios.length > 0 ? sceneAudios : undefined,
         audioUrl: undefined,
         audioDurationMs: undefined,
       };
@@ -1051,26 +1057,36 @@ const generateVoiceoverStep = createStep({
       };
     }
 
-    const audioResult = await audioProvider.generate(inputData.narrationText);
+    try {
+      const audioResult = await audioProvider.generate(inputData.narrationText);
 
-    await insertMediaAsset({
-      userId: inputData.userId,
-      contentId: inputData.contentId,
-      type: "audio",
-      url: audioResult.url,
-      provider: "dashscope",
-      metadata: {
-        durationMs: audioResult.durationMs,
-        source: "cosyvoice-tts",
-      },
-    });
+      await insertMediaAsset({
+        userId: inputData.userId,
+        contentId: inputData.contentId,
+        type: "audio",
+        url: audioResult.url,
+        provider: "dashscope",
+        metadata: {
+          durationMs: audioResult.durationMs,
+          source: "cosyvoice-tts",
+        },
+      });
 
-    return {
-      ...inputData,
-      sceneAudios: undefined,
-      audioUrl: audioResult.url,
-      audioDurationMs: audioResult.durationMs,
-    };
+      return {
+        ...inputData,
+        sceneAudios: undefined,
+        audioUrl: audioResult.url,
+        audioDurationMs: audioResult.durationMs,
+      };
+    } catch (error) {
+      console.warn(`[generateVoiceoverStep] TTS failed: ${(error as Error).message}`);
+      return {
+        ...inputData,
+        sceneAudios: undefined,
+        audioUrl: undefined,
+        audioDurationMs: undefined,
+      };
+    }
   },
 });
 

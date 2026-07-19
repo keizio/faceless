@@ -44,37 +44,43 @@ const generateOrUseAudioStep = createStep({
     language: z.string(),
     moodOrGenre: z.string(),
     visualStyle: z.string(),
-    audioUrl: z.string(),
-    audioDurationMs: z.number(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
   }),
   execute: async ({ inputData }) => {
-    let audioUrl: string;
-    let audioDurationMs: number;
+    let audioUrl: string | undefined;
+    let audioDurationMs: number | undefined;
 
     if (inputData.audioSource === "upload" && inputData.audioFileUrl) {
       audioUrl = inputData.audioFileUrl;
       audioDurationMs = inputData.audioDurationMs ?? 30000;
     } else {
-      const musicProvider = getProviders().music;
-      const result = await musicProvider.generate(
-        inputData.moodOrGenre || inputData.prompt,
-        30,
-      );
-      audioUrl = result.url;
-      audioDurationMs = result.durationMs;
+      try {
+        const musicProvider = getProviders().music;
+        const result = await musicProvider.generate(
+          inputData.moodOrGenre || inputData.prompt,
+          30,
+        );
+        audioUrl = result.url;
+        audioDurationMs = result.durationMs;
+      } catch (error) {
+        console.warn(`[generateOrUseAudioStep] Music generation failed, continuing without audio: ${(error as Error).message}`);
+      }
     }
 
-    await insertMediaAsset({
-      userId: inputData.userId,
-      contentId: inputData.contentId,
-      type: "audio",
-      url: audioUrl,
-      provider: "dashscope-fun-music",
-      metadata: {
-        source: inputData.audioSource,
-        moodOrGenre: inputData.moodOrGenre,
-      },
-    });
+    if (audioUrl) {
+      await insertMediaAsset({
+        userId: inputData.userId,
+        contentId: inputData.contentId,
+        type: "audio",
+        url: audioUrl,
+        provider: "dashscope-fun-music",
+        metadata: {
+          source: inputData.audioSource,
+          moodOrGenre: inputData.moodOrGenre,
+        },
+      });
+    }
 
     return {
       contentId: inputData.contentId,
@@ -105,8 +111,8 @@ const generateMusicStoryboardStep = createStep({
     language: z.string(),
     moodOrGenre: z.string(),
     visualStyle: z.string(),
-    audioUrl: z.string(),
-    audioDurationMs: z.number(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -118,8 +124,8 @@ const generateMusicStoryboardStep = createStep({
     language: z.string(),
     moodOrGenre: z.string(),
     visualStyle: z.string(),
-    audioUrl: z.string(),
-    audioDurationMs: z.number(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
   }),
@@ -225,8 +231,8 @@ const generateMusicImagesStep = createStep({
     language: z.string(),
     moodOrGenre: z.string(),
     visualStyle: z.string(),
-    audioUrl: z.string(),
-    audioDurationMs: z.number(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
   }),
@@ -239,8 +245,8 @@ const generateMusicImagesStep = createStep({
         description: z.string(),
       }),
     ),
-    audioUrl: z.string(),
-    audioDurationMs: z.number(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
   }),
@@ -324,8 +330,8 @@ const generateMusicVideoClipsStep = createStep({
         description: z.string(),
       }),
     ),
-    audioUrl: z.string(),
-    audioDurationMs: z.number(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
   }),
@@ -333,8 +339,8 @@ const generateMusicVideoClipsStep = createStep({
     contentId: z.string(),
     userId: z.string(),
     videoUrls: z.array(z.string()),
-    audioUrl: z.string(),
-    audioDurationMs: z.number(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
   }),
   execute: async ({ inputData }) => {
     const storyboard = (inputData.enhancedPrompt as EnhancedPrompt).visualPrompt ?? "";
@@ -378,19 +384,32 @@ const composeMusicVideoAudioStep = createStep({
     contentId: z.string(),
     userId: z.string(),
     videoUrls: z.array(z.string()),
-    audioUrl: z.string(),
-    audioDurationMs: z.number(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
     videoUrls: z.array(z.string()),
-    audioUrl: z.string(),
-    audioDurationMs: z.number(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
   }),
   execute: async ({ inputData }) => {
-    if (inputData.videoUrls.length <= 1 && !inputData.audioUrl) {
-      return inputData;
+    if (!inputData.audioUrl) {
+      if (inputData.videoUrls.length <= 1) {
+        return inputData;
+      }
+      const compositedUrl = await composeVideoWithAudio(
+        inputData.videoUrls,
+        undefined,
+      );
+      return {
+        contentId: inputData.contentId,
+        userId: inputData.userId,
+        videoUrls: [compositedUrl],
+        audioUrl: undefined,
+        audioDurationMs: undefined,
+      };
     }
 
     const compositedUrl = await composeVideoWithAudio(
@@ -415,14 +434,14 @@ const saveMusicVideoVersionStep = createStep({
     contentId: z.string(),
     userId: z.string(),
     videoUrls: z.array(z.string()),
-    audioUrl: z.string(),
-    audioDurationMs: z.number(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
     versionId: z.string(),
     videoUrls: z.array(z.string()),
-    audioUrl: z.string(),
+    audioUrl: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
     const [maxVersion] = await db
@@ -469,7 +488,7 @@ export const generateMusicVideoWorkflow = createWorkflow({
     contentId: z.string(),
     versionId: z.string(),
     videoUrls: z.array(z.string()),
-    audioUrl: z.string(),
+    audioUrl: z.string().optional(),
   }),
 })
   .then(generateOrUseAudioStep)
