@@ -10,12 +10,30 @@ import {
   OpenRouterTextProvider,
   OpenRouterImageProvider,
 } from "./openrouter.js";
+import { ElevenLabsAudioProvider } from "./elevenlabs.js";
+import {
+  GoogleAIStudioTextProvider,
+  GoogleAIStudioImageProvider,
+  GoogleAIStudioVideoProvider,
+  GoogleAIStudioAudioProvider,
+  GoogleAIStudioMusicProvider,
+} from "./google-ai-studio.js";
+import {
+  GoogleVertexTextProvider,
+  GoogleVertexImageProvider,
+  GoogleVertexVideoProvider,
+  GoogleVertexAudioProvider,
+  GoogleVertexMusicProvider,
+} from "./google-vertex-ai.js";
 
-type ProviderName = "dashscope" | "openrouter";
+type ProviderName = "dashscope" | "openrouter" | "elevenlabs" | "google-ai-studio" | "google-vertex-ai";
 
 function getEnvVar(suffix: string): ProviderName {
   const val = process.env[`AI_${suffix}_PROVIDER`];
   if (val === "openrouter") return "openrouter";
+  if (val === "elevenlabs") return "elevenlabs";
+  if (val === "google-ai-studio") return "google-ai-studio";
+  if (val === "google-vertex-ai") return "google-vertex-ai";
   return "dashscope";
 }
 
@@ -25,6 +43,10 @@ function resolveText(name: ProviderName): TextProvider {
       return new DashScopeTextProvider();
     case "openrouter":
       return new OpenRouterTextProvider();
+    case "google-ai-studio":
+      return new GoogleAIStudioTextProvider();
+    case "google-vertex-ai":
+      return new GoogleVertexTextProvider();
     default:
       throw new Error(`Unknown text provider: ${name}`);
   }
@@ -36,21 +58,48 @@ function resolveImage(name: ProviderName): ImageProvider {
       return new DashScopeImageProvider();
     case "openrouter":
       return new OpenRouterImageProvider();
+    case "google-ai-studio":
+      return new GoogleAIStudioImageProvider();
+    case "google-vertex-ai":
+      return new GoogleVertexImageProvider();
     default:
       throw new Error(`Unknown image provider: ${name}`);
   }
 }
 
-function resolveVideo(_name: ProviderName): VideoProvider {
-  return new DashScopeVideoProvider();
+function resolveVideo(name: ProviderName): VideoProvider {
+  switch (name) {
+    case "google-ai-studio":
+      return new GoogleAIStudioVideoProvider();
+    case "google-vertex-ai":
+      return new GoogleVertexVideoProvider();
+    default:
+      return new DashScopeVideoProvider();
+  }
 }
 
-function resolveAudio(_name: ProviderName): AudioProvider {
-  return new DashScopeAudioProvider();
+function resolveAudio(name: ProviderName): AudioProvider {
+  switch (name) {
+    case "elevenlabs":
+      return new ElevenLabsAudioProvider();
+    case "google-ai-studio":
+      return new GoogleAIStudioAudioProvider();
+    case "google-vertex-ai":
+      return new GoogleVertexAudioProvider();
+    default:
+      return new DashScopeAudioProvider();
+  }
 }
 
-function resolveMusic(_name: ProviderName): MusicProvider {
-  return new DashScopeMusicProvider();
+function resolveMusic(name: ProviderName): MusicProvider {
+  switch (name) {
+    case "google-ai-studio":
+      return new GoogleAIStudioMusicProvider();
+    case "google-vertex-ai":
+      return new GoogleVertexMusicProvider();
+    default:
+      return new DashScopeMusicProvider();
+  }
 }
 
 function createProviders(): Providers {

@@ -15,21 +15,6 @@ AGITATE: Amplify the problem — show the cost of inaction, the recurring frustr
 SOLUTION: Present the resolution as the natural answer. Show the transformation, the relief, the better state. Make the CTA feel like the obvious next step.`;
 }
 
-export function renderFabFramework(features: string[]): string {
-  const featureList = features.length > 0
-    ? features.map((f) => `- ${f}`).join("\n")
-    : "- [Identify key features of the subject]";
-
-  return `STRUCTURE (FAB Framework — Feature → Advantage → Benefit):
-Translate features into emotional benefits for the viewer:
-${featureList}
-
-For each feature:
-1. STATE the feature (what it is)
-2. EXPLAIN the advantage (what it does differently)
-3. CONNECT to a benefit (why the viewer should care — the emotional or practical payoff)`;
-}
-
 export function renderHeadlineFormula(formula: string): string {
   const formulas: Record<string, string> = {
     "how-to": `HEADLINE FORMULA (How-To):
@@ -207,26 +192,4 @@ export function renderToneByChannel(platform: Platform): string {
   return toneMap[platform] ?? toneMap.generic;
 }
 
-export function renderVoiceMatrix(voice: string): string {
-  const voices: Record<string, string> = {
-    authoritative: `VOICE: Authoritative
-Confident, direct, commanding. Short declarative sentences. No hedging. State facts and opinions with certainty. The viewer trusts you because you sound like you know exactly what you're talking about.`,
 
-    conversational: `VOICE: Conversational
-Warm, casual, like chatting with a knowledgeable friend. Use contractions, colloquialisms, and natural speech patterns. Ask rhetorical questions. Include asides and parenthetical thoughts.`,
-
-    inspirational: `VOICE: Inspirational
-Uplifting, energetic, forward-looking. Use vivid imagery and emotional language. Focus on possibility and transformation. Short, powerful sentences mixed with longer flowing ones. Paint the vision.`,
-
-    educational: `VOICE: Educational
-Clear, structured, patient. Break complex ideas into digestible pieces. Use analogies and examples. Signal transitions ("First...", "Here's the key insight..."). Make the viewer feel smarter.`,
-
-    humorous: `VOICE: Humorous
-Witty, self-aware, playful. Use timing, callbacks, and unexpected twists. Self-deprecation works. Don't force jokes — let humor arise from honest observation. Keep it relatable, not try-hard.`,
-
-    provocative: `VOICE: Provocative
-Bold, challenging, contrarian. Question assumptions. State unpopular opinions with conviction. Use pattern interrupts — say something unexpected. The goal is to make the viewer think, not just nod along.`,
-  };
-
-  return voices[voice] ?? voices["conversational"];
-}

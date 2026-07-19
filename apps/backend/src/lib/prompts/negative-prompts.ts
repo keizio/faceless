@@ -42,6 +42,3 @@ export function getNegativePrompt(platform: Platform): string {
   return allNegatives.join(", ");
 }
 
-export function getNegativePromptSuffix(platform: Platform): string {
-  return `--neg ${getNegativePrompt(platform)}`;
-}

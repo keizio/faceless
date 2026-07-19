@@ -4,22 +4,20 @@ import { getProviders } from "../../lib/providers/factory.js";
 import { getImageSize } from "../../lib/providers/dashscope.js";
 import { buildPromptContext, assembleFinalPrompt, renderBrandKitGuidance } from "../../lib/prompts/prompt-builder.js";
 import { getNegativePrompt } from "../../lib/prompts/negative-prompts.js";
-import { renderAvatarForText, renderNoAvatarGuidance, renderAvatarForVisual } from "../../lib/prompts/avatar-injector.js";
+import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/avatar-injector.js";
 import { cameraDirectionForPlatform } from "../../lib/prompts/camera-dsl.js";
 import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { insertMediaAsset } from "../../lib/media.js";
-import { eq } from "drizzle-orm";
+import { eq, max } from "drizzle-orm";
 import type { Platform, ContentType, BrandKit } from "@faceless/shared";
 import type { EnhancedPrompt, ArtStyle } from "../../lib/prompts/types.js";
 import {
   renderChatTemplate,
   renderSplitScreenTemplate,
-  renderFactCardTemplate,
-  renderQuoteCardTemplate,
-  renderListicleCardTemplate,
 } from "../../lib/compositing/renderer.js";
+import { templateOverlayToTextLayers } from "../../lib/compositing/overlay-to-layers.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
 import { applyWatermarkToBuffer } from "../../lib/compositing/watermark.js";
 import { mastra } from "../../mastra/index.js";
@@ -32,21 +30,23 @@ import {
   renderPersuasionPrinciple,
   renderToneByChannel,
 } from "../../lib/prompts/copywriting-frameworks.js";
-import {
-  buildScriptWriterSystemPrompt,
-  buildQualityReviewerSystemPrompt,
-} from "../../lib/prompts/system-prompts.js";
 import type { CopywritingFramework, HeadlineFormula, CtaPattern } from "../../lib/prompts/types.js";
 import { buildStoryBibleUserMessage, parseStoryBibleResponse } from "../../lib/prompts/story-bible.js";
 import { buildContinuityCheckUserMessage, parseContinuityCheckResponse } from "../../lib/prompts/continuity-checker.js";
 import { assembleContinuityPrompt, buildSlideStoryboardUserMessage, parseSlideStoryboardResponse } from "../../lib/prompts/continuity-prompt-builder.js";
 
+const imageBufferCache = new Map<string, Buffer>();
+
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
+  const cached = imageBufferCache.get(url);
+  if (cached) return cached;
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to download image from ${url}: ${response.status}`);
   }
-  return Buffer.from(await response.arrayBuffer());
+  const buffer = Buffer.from(await response.arrayBuffer());
+  imageBufferCache.set(url, buffer);
+  return buffer;
 }
 
 const contentInputSchema = z.object({
@@ -66,6 +66,8 @@ const contentInputSchema = z.object({
   templateNarrationGuidance: z.string().optional(),
   templateId: z.string().optional(),
   templateInputs: z.record(z.unknown()).optional(),
+  templateFramework: z.string().optional(),
+  templateCtaPattern: z.string().optional(),
 });
 
 const buildPromptContextStep = createStep({
@@ -92,6 +94,9 @@ const buildPromptContextStep = createStep({
     templateNarrationGuidance: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
+    templateFramework: z.string().optional(),
+    templateCtaPattern: z.string().optional(),
+    isFaceless: z.boolean(),
   }),
   execute: async ({ inputData }) => {
     const context = await buildPromptContext(
@@ -102,6 +107,8 @@ const buildPromptContextStep = createStep({
       inputData.language,
       inputData.aspectRatio,
     );
+
+    const isFaceless = !context.avatar;
 
     const strategy = PLATFORM_STRATEGIES[inputData.platform as Platform] ?? PLATFORM_STRATEGIES.generic;
 
@@ -128,6 +135,7 @@ const buildPromptContextStep = createStep({
       platformGuidance: strategy.visualStyleGuidance,
       slideCount: inputData.slideCount,
       aspectRatio: inputData.aspectRatio,
+      isFaceless,
       templateSystemPrompt: inputData.templateSystemPrompt,
       templateVisualGuidance: inputData.templateVisualGuidance,
       templateNegativeAdditions: inputData.templateNegativeAdditions,
@@ -152,14 +160,16 @@ const scriptOutputSchema = z.object({
   artStyle: z.string().optional(),
   brandKitJson: z.string().optional(),
   avatarContext: z.string().optional(),
-  isFaceless: z.boolean().optional(),
+  isFaceless: z.boolean(),
   slideCount: z.number().optional(),
   aspectRatio: z.string(),
-  templateId: z.string().optional(),
-  templateInputs: z.record(z.unknown()).optional(),
-  reviewScore: z.number().optional(),
-  reviewFeedback: z.array(z.string()).optional(),
-});
+templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
+    templateFramework: z.string().optional(),
+    templateCtaPattern: z.string().optional(),
+    reviewScore: z.number().optional(),
+    reviewFeedback: z.array(z.string()).optional(),
+  });
 
 const scriptInputSchema = z.object({
   contentId: z.string(),
@@ -181,6 +191,9 @@ const scriptInputSchema = z.object({
   templateNarrationGuidance: z.string().optional(),
   templateId: z.string().optional(),
   templateInputs: z.record(z.unknown()).optional(),
+  templateFramework: z.string().optional(),
+  templateCtaPattern: z.string().optional(),
+  isFaceless: z.boolean(),
 });
 
 function buildScriptUserMessage(params: {
@@ -189,13 +202,15 @@ function buildScriptUserMessage(params: {
   platform: string;
   language: string;
   templateScriptStructure?: string;
+  templateFramework?: string;
+  templateCtaPattern?: string;
   reviewFeedback?: string[];
 }): string {
-  const { prompt, contentType, platform, language, templateScriptStructure, reviewFeedback } = params;
+  const { prompt, contentType, platform, language, templateScriptStructure, templateFramework, templateCtaPattern, reviewFeedback } = params;
 
-  const framework = "aida" as CopywritingFramework;
+  const framework = (templateFramework ?? "aida") as CopywritingFramework;
   const headline = "curiosity-gap" as HeadlineFormula;
-  const cta = "low-friction" as CtaPattern;
+  const cta = (templateCtaPattern ?? "low-friction") as CtaPattern;
 
   const sections: string[] = [
     `Create a ${contentType} script for ${platform} about: ${prompt}`,
@@ -230,7 +245,7 @@ const generateScriptStep = createStep({
   inputSchema: scriptInputSchema,
   outputSchema: scriptOutputSchema,
   execute: async ({ inputData }) => {
-    const isFaceless = !inputData.avatarContext || inputData.avatarContext.includes("no human figures");
+    const isFaceless = inputData.isFaceless ?? (!inputData.avatarContext || inputData.avatarContext.includes("no human figures"));
 
     const agent = mastra.getAgent("scriptWriter");
 
@@ -240,6 +255,8 @@ const generateScriptStep = createStep({
       platform: inputData.platform,
       language: inputData.language,
       templateScriptStructure: inputData.templateScriptStructure,
+      templateFramework: inputData.templateFramework,
+      templateCtaPattern: inputData.templateCtaPattern,
     });
 
     const response = await agent.generate(userMessage);
@@ -364,6 +381,8 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
             contentType: inputData.contentType,
             platform: inputData.platform,
             language: inputData.language,
+            templateFramework: inputData.templateFramework,
+            templateCtaPattern: inputData.templateCtaPattern,
             reviewFeedback: feedback,
           });
 
@@ -649,28 +668,32 @@ const generateSlideImagesStep = createStep({
           inputData.enhancedPrompt || `${inputData.prompt} for a ${inputData.platform} carousel post`,
         );
 
-    for (let i = 0; i < slideCount; i++) {
-      const slidePrompt = prompts[i] ?? prompts[0];
+    const imageResults = await Promise.all(
+      Array.from({ length: slideCount }, async (_, i) => {
+        const slidePrompt = prompts[i] ?? prompts[0];
 
-      const negativePrompt = getNegativePrompt(inputData.platform as Platform);
-      const imageUrl = await getProviders().image.generate(slidePrompt, size, undefined, { negativePrompt });
+        const negativePrompt = getNegativePrompt(inputData.platform as Platform);
+        const imageUrl = await getProviders().image.generate(slidePrompt, size, undefined, { negativePrompt });
 
-      await insertMediaAsset({
-        userId: inputData.userId,
-        contentId: inputData.contentId,
-        type: "image",
-        url: imageUrl,
-        provider: process.env.AI_IMAGE_PROVIDER ?? "dashscope",
-        metadata: {
-          slide: i + 1,
-          totalSlides: slideCount,
-          prompt: slidePrompt,
-          size,
-        },
-      });
+        await insertMediaAsset({
+          userId: inputData.userId,
+          contentId: inputData.contentId,
+          type: "image",
+          url: imageUrl,
+          provider: process.env.AI_IMAGE_PROVIDER ?? "dashscope",
+          metadata: {
+            slide: i + 1,
+            totalSlides: slideCount,
+            prompt: slidePrompt,
+            size,
+          },
+        });
 
-      imageUrls.push(imageUrl);
-    }
+        return imageUrl;
+      }),
+    );
+
+    imageUrls.push(...imageResults);
 
     return {
       contentId: inputData.contentId,
@@ -680,7 +703,7 @@ const generateSlideImagesStep = createStep({
       imageUrls,
       contentType: inputData.contentType,
       brandKitJson: inputData.brandKitJson,
-      templateId: inputData.templateId,
+templateId: inputData.templateId,
       templateInputs: inputData.templateInputs,
       aspectRatio: inputData.aspectRatio,
     };
@@ -709,11 +732,15 @@ const compositeSlideStep = createStep({
     script: z.string(),
     caption: z.string(),
     contentType: z.enum(["image", "slide", "video", "text"]),
+    textLayers: z.record(z.array(z.any())).optional(),
   }),
   execute: async ({ inputData }) => {
     const { templateId, templateInputs, imageUrls, aspectRatio } = inputData;
 
-    if (!templateId || !templateInputs || imageUrls.length === 0) {
+    let resultUrls: string[] = imageUrls;
+    let textLayers: Record<string, unknown[]> | undefined;
+
+    if (!templateId || !templateInputs || Object.keys(templateInputs).length === 0 || imageUrls.length === 0) {
       return {
         contentId: inputData.contentId,
         userId: inputData.userId,
@@ -747,52 +774,24 @@ const compositeSlideStep = createStep({
           const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedUrls.push(url);
         }
+        const labelLayers = templateOverlayToTextLayers(templateId, templateInputs, aspectRatio);
+        if (Object.keys(labelLayers).length > 0) {
+          textLayers = labelLayers as unknown as Record<string, unknown[]>;
+        }
         break;
       }
 
       case "listicle": {
-        const items = (templateInputs.items as string[]) ?? [];
-        const itemCount = (templateInputs.itemCount as number) ?? (items.length || imageUrls.length);
-        const topic = (templateInputs.topic as string) ?? "";
-
-        for (let i = 0; i < itemCount; i++) {
-          const itemTitle = items[i] ?? `Item ${i + 1}`;
-          const itemDescription = `Description for ${itemTitle}`;
-          const bgBuffer = imageUrls[i]
-            ? await downloadImageAsBuffer(imageUrls[i])
-            : undefined;
-          const buffer = await renderListicleCardTemplate(
-            templateInputs,
-            aspectRatio,
-            i + 1,
-            itemTitle,
-            itemDescription,
-            itemCount,
-            bgBuffer,
-          );
-          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-          compositedUrls.push(url);
-        }
+        const count = (templateInputs.itemCount as number) ?? (imageUrls.length || 5);
+        textLayers = templateOverlayToTextLayers(templateId, templateInputs, aspectRatio, count) as unknown as Record<string, unknown[]>;
+        resultUrls = imageUrls;
         break;
       }
 
-      case "fact-card": {
-        for (let i = 0; i < imageUrls.length; i++) {
-          const bgBuffer = await downloadImageAsBuffer(imageUrls[i]);
-          const buffer = await renderFactCardTemplate(templateInputs, aspectRatio, bgBuffer);
-          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-          compositedUrls.push(url);
-        }
-        break;
-      }
-
+      case "fact-card":
       case "quote-card": {
-        for (let i = 0; i < imageUrls.length; i++) {
-          const bgBuffer = await downloadImageAsBuffer(imageUrls[i]);
-          const buffer = await renderQuoteCardTemplate(templateInputs, aspectRatio, bgBuffer);
-          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-          compositedUrls.push(url);
-        }
+        textLayers = templateOverlayToTextLayers(templateId, templateInputs, aspectRatio) as unknown as Record<string, unknown[]>;
+        resultUrls = imageUrls;
         break;
       }
 
@@ -807,6 +806,10 @@ const compositeSlideStep = createStep({
         };
     }
 
+    if (compositedUrls.length > 0) {
+      resultUrls = compositedUrls;
+    }
+
     let brandKit: BrandKit | undefined;
     try {
       if (inputData.brandKitJson) {
@@ -814,15 +817,15 @@ const compositeSlideStep = createStep({
       }
     } catch {}
 
-    if (brandKit?.logoUrl && compositedUrls.length > 0) {
-      const watermarkedUrls: string[] = [];
-      for (const url of compositedUrls) {
-        const response = await fetch(url);
-        const buffer = Buffer.from(await response.arrayBuffer());
-        const watermarked = await applyWatermarkToBuffer(buffer, brandKit.logoUrl);
-        const newUrl = await uploadFile(watermarked, randomFilename("png"), "image/png");
-        watermarkedUrls.push(newUrl);
-      }
+    if (brandKit?.logoUrl && resultUrls.length > 0) {
+      const watermarkedUrls = await Promise.all(
+        resultUrls.map(async (url) => {
+          const response = await fetch(url);
+          const buffer = Buffer.from(await response.arrayBuffer());
+          const watermarked = await applyWatermarkToBuffer(buffer, brandKit.logoUrl!);
+          return await uploadFile(watermarked, randomFilename("png"), "image/png");
+        }),
+      );
       return {
         contentId: inputData.contentId,
         userId: inputData.userId,
@@ -830,16 +833,18 @@ const compositeSlideStep = createStep({
         script: inputData.script,
         caption: inputData.caption,
         contentType: inputData.contentType,
+        textLayers,
       };
     }
 
     return {
       contentId: inputData.contentId,
       userId: inputData.userId,
-      compositedImageUrls: compositedUrls,
+      compositedImageUrls: resultUrls,
       script: inputData.script,
       caption: inputData.caption,
       contentType: inputData.contentType,
+      textLayers,
     };
   },
 });
@@ -854,6 +859,7 @@ const saveSlideVersionStep = createStep({
     caption: z.string(),
     compositedImageUrls: z.array(z.string()),
     contentType: z.enum(["image", "slide", "video", "text"]),
+    textLayers: z.record(z.array(z.any())).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -862,14 +868,12 @@ const saveSlideVersionStep = createStep({
     caption: z.string(),
   }),
   execute: async ({ inputData }) => {
-    const existingVersions = await db.query.contentVersions.findMany({
-      where: eq(contentVersions.contentId, inputData.contentId),
-      columns: { versionNumber: true },
-    });
+    const [maxVersion] = await db
+      .select({ versionNumber: max(contentVersions.versionNumber) })
+      .from(contentVersions)
+      .where(eq(contentVersions.contentId, inputData.contentId));
 
-    const versionNumber = existingVersions.length > 0
-      ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1
-      : 1;
+    const versionNumber = (maxVersion?.versionNumber ?? 0) + 1;
 
     const isTextContent = inputData.contentType === "text";
 
@@ -885,6 +889,7 @@ const saveSlideVersionStep = createStep({
           script: inputData.script,
           caption: inputData.caption,
           ...(inputData.compositedImageUrls.length > 0 ? { images: inputData.compositedImageUrls } : {}),
+          ...(inputData.textLayers ? { textLayers: inputData.textLayers } : {}),
         },
       })
       .returning();

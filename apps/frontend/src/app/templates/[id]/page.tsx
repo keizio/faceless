@@ -6,7 +6,7 @@ import { TemplateForm } from "@/components/templates/TemplateForm";
 import { useTemplate } from "@/hooks/useTemplates";
 import { useProjects } from "@/hooks/useProjects";
 import { useAvatars } from "@/hooks/useAvatars";
-import { PLATFORM_SPECS, LANGUAGES } from "@faceless/shared";
+import { PLATFORM_SPECS, LANGUAGES, CREDIT_COSTS, TEMPLATE_MULTIPLIERS } from "@faceless/shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -101,6 +101,23 @@ export default function TemplateDetailPage({
     video: "Video",
     text: "Text",
   };
+
+  const calculateTemplateCost = () => {
+    if (!template || !selectedContentType) return null;
+    
+    const baseCost = CREDIT_COSTS[selectedContentType as keyof typeof CREDIT_COSTS] ?? 0;
+    const multiplier = TEMPLATE_MULTIPLIERS[template.id] ?? TEMPLATE_MULTIPLIERS['*'];
+    const templateSurcharge = multiplier > 1.0 ? Math.ceil(baseCost * (multiplier - 1.0)) : 0;
+    
+    return {
+      baseCost,
+      multiplier,
+      templateSurcharge,
+      total: baseCost + templateSurcharge,
+    };
+  };
+
+  const estimatedCost = calculateTemplateCost();
 
   const buildPrompt = (): string => {
     const parts: string[] = [];
@@ -315,6 +332,29 @@ export default function TemplateDetailPage({
                     inputs={templateInputs}
                     onChange={setTemplateInputs}
                   />
+
+                  {estimatedCost && (
+                    <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Base ({OUTPUT_TYPE_LABELS[selectedContentType] ?? selectedContentType})
+                        </span>
+                        <span className="font-medium">{estimatedCost.baseCost} credit{estimatedCost.baseCost !== 1 ? "s" : ""}</span>
+                      </div>
+                      {estimatedCost.templateSurcharge > 0 && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-orange-500">
+                            Template: {template.name} ({estimatedCost.multiplier}x)
+                          </span>
+                          <span className="font-medium text-orange-500">+{estimatedCost.templateSurcharge}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-sm pt-1 border-t border-border/50">
+                        <span className="font-semibold text-foreground">Total</span>
+                        <span className="font-bold text-primary">{estimatedCost.total} credits</span>
+                      </div>
+                    </div>
+                  )}
 
                   <Button
                     onClick={handleCreate}

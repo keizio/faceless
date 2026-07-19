@@ -1,8 +1,9 @@
 import { Agent } from "@mastra/core/agent";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { dashscopeImageTool } from "../mastra/tools/dashscope-image-tool.js";
+import { imageGenerationTool } from "../mastra/tools/image-generation-tool.js";
 import { webSearchTool } from "../mastra/tools/web-search-tool.js";
 import type { Mastra } from "@mastra/core/mastra";
+import jwt from "jsonwebtoken";
 
 const TEXT_PROVIDER = process.env.AI_TEXT_PROVIDER ?? "dashscope";
 const TEXT_MODEL = process.env.AI_TEXT_MODEL ?? "qwen-plus";
@@ -17,6 +18,48 @@ if (TEXT_PROVIDER === "dashscope") {
     apiKey: process.env.DASHSCOPE_API_KEY ?? "",
   });
   llm = dashscope(TEXT_MODEL);
+} else if (TEXT_PROVIDER === "google-ai-studio") {
+  const googleAIStudio = createOpenAICompatible({
+    name: "google-ai-studio",
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+    apiKey: process.env.GOOGLE_AI_STUDIO_API_KEY ?? "",
+  });
+  llm = googleAIStudio(TEXT_MODEL);
+} else if (TEXT_PROVIDER === "google-vertex-ai") {
+  const credentials = process.env.GOOGLE_VERTEX_CREDENTIALS;
+  if (!credentials) {
+    throw new Error("GOOGLE_VERTEX_CREDENTIALS not set for google-vertex-ai provider");
+  }
+  const parsed = JSON.parse(credentials) as { client_email: string; private_key: string; project_id: string };
+  const now = Math.floor(Date.now() / 1000);
+  const claimSet = {
+    iss: parsed.client_email,
+    scope: "https://www.googleapis.com/auth/cloud-platform",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now,
+  };
+  const signedJwt = jwt.sign(claimSet, parsed.private_key, { algorithm: "RS256" });
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: signedJwt,
+    }),
+  });
+  if (!tokenResponse.ok) {
+    throw new Error(`Vertex AI auth failed: ${await tokenResponse.text()}`);
+  }
+  const tokenData = (await tokenResponse.json()) as { access_token: string };
+  const project = process.env.GOOGLE_VERTEX_PROJECT ?? parsed.project_id;
+  const location = process.env.GOOGLE_VERTEX_LOCATION ?? "us-central1";
+  const googleVertex = createOpenAICompatible({
+    name: "google-vertex-ai",
+    baseURL: `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models`,
+    apiKey: tokenData.access_token,
+  });
+  llm = googleVertex(TEXT_MODEL);
 } else {
   const openrouter = createOpenAICompatible({
     name: "openrouter",
@@ -112,7 +155,7 @@ Output format: JSON array of {
   "camera_direction": { shotType, movement?, lighting, composition?, style? }
 }`,
   model: llm,
-  tools: { dashscopeImageTool },
+  tools: { imageGenerationTool },
 });
 
 export const captionGeneratorAgent: Agent = new Agent({

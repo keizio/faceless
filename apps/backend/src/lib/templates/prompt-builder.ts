@@ -1,4 +1,6 @@
 import type { CopywritingFramework, CtaPattern } from "../prompts/types.js";
+import type { ArtStyle } from "../prompts/art-style-detector.js";
+import { getArtStyleModifier } from "../prompts/art-style-detector.js";
 
 export interface TemplatePrompts {
   systemPrompt: string;
@@ -8,37 +10,39 @@ export interface TemplatePrompts {
   narrationGuidance?: string;
   framework?: CopywritingFramework;
   ctaPattern?: CtaPattern;
+  artStyle?: string;
 }
 
 export function buildTemplatePrompt(
   templateId: string,
   inputs: Record<string, unknown>,
+  artStyle?: ArtStyle,
 ): TemplatePrompts | null {
   switch (templateId) {
     case "ugc-product-marketing":
-      return buildUgcProductMarketingPrompts(inputs);
+      return buildUgcProductMarketingPrompts(inputs, artStyle);
     case "storytime-narration":
-      return buildStorytimeNarrationPrompts(inputs);
+      return buildStorytimeNarrationPrompts(inputs, artStyle);
     case "fake-chat":
-      return buildFakeChatPrompts(inputs);
+      return buildFakeChatPrompts(inputs, artStyle);
     case "fact-card":
-      return buildFactCardPrompts(inputs);
+      return buildFactCardPrompts(inputs, artStyle);
     case "quote-card":
-      return buildQuoteCardPrompts(inputs);
+      return buildQuoteCardPrompts(inputs, artStyle);
     case "split-screen":
-      return buildSplitScreenPrompts(inputs);
+      return buildSplitScreenPrompts(inputs, artStyle);
     case "listicle":
-      return buildListiclePrompts(inputs);
+      return buildListiclePrompts(inputs, artStyle);
     case "ai-music-video":
-      return buildAiMusicVideoPrompts(inputs);
+      return buildAiMusicVideoPrompts(inputs, artStyle);
     case "pov":
-      return buildPovPrompts(inputs);
+      return buildPovPrompts(inputs, artStyle);
     default:
       return null;
   }
 }
 
-function buildUgcProductMarketingPrompts(inputs: Record<string, unknown>): TemplatePrompts {
+function buildUgcProductMarketingPrompts(inputs: Record<string, unknown>, _artStyle?: ArtStyle): TemplatePrompts {
   const productName = inputs.productName as string ?? "";
   const productDescription = inputs.productDescription as string ?? "";
   const keyFeatures = (inputs.keyFeatures as string[]) ?? [];
@@ -76,7 +80,7 @@ CRITICAL RULES:
 - Include a clear call-to-action
 - Never use fake statistics or follower counts
 - Never include social media handles`,
-    visualGuidance: `Lifestyle product photography style. Show the product in a real-life context — hands holding it, it on a desk, in a bathroom, being used naturally. Warm, inviting lighting. The product should be the hero but feel organic, not staged. Avoid stock-photo aesthetics.${imageReference}`,
+    visualGuidance: `Show the product in a real-life context — hands holding it, it on a desk, in a bathroom, being used naturally. The product should be the hero but feel organic, not staged. Avoid stock-photo aesthetics.${imageReference}`,
     negativeAdditions: [
       "stock photo",
       "generic product shot",
@@ -91,7 +95,7 @@ CRITICAL RULES:
   };
 }
 
-function buildStorytimeNarrationPrompts(inputs: Record<string, unknown>): TemplatePrompts {
+function buildStorytimeNarrationPrompts(inputs: Record<string, unknown>, _artStyle?: ArtStyle): TemplatePrompts {
   const storyTopic = inputs.storyTopic as string ?? "";
   const tone = inputs.tone as string ?? "dramatic";
   const hookStyle = inputs.hookStyle as string ?? "question";
@@ -133,7 +137,7 @@ CRITICAL RULES:
 - Use emotional language
 - Include sensory details
 - Never include fake statistics or social media handles`,
-    visualGuidance: `Cinematic, atmospheric visuals that match the emotional arc. Moody lighting, dramatic compositions. Each scene should evoke the feeling of that story beat. Use environmental storytelling — show, don't tell.`,
+    visualGuidance: `Visuals that match the emotional arc. Each scene should evoke the feeling of that story beat. Use environmental storytelling — show, don't tell.`,
     negativeAdditions: [
       "static",
       "boring",
@@ -148,7 +152,7 @@ CRITICAL RULES:
   };
 }
 
-function buildFakeChatPrompts(inputs: Record<string, unknown>): TemplatePrompts {
+function buildFakeChatPrompts(inputs: Record<string, unknown>, _artStyle?: ArtStyle): TemplatePrompts {
   const chatStyle = inputs.chatStyle as string ?? "whatsapp";
   const senderName = inputs.senderName as string ?? "You";
   const receiverName = inputs.receiverName as string ?? "Friend";
@@ -189,7 +193,7 @@ RULES:
   };
 }
 
-function buildFactCardPrompts(inputs: Record<string, unknown>): TemplatePrompts {
+function buildFactCardPrompts(inputs: Record<string, unknown>, _artStyle?: ArtStyle): TemplatePrompts {
   const factText = inputs.factText as string ?? "";
   const topic = inputs.topic as string ?? "";
   const style = inputs.style as string ?? "bold";
@@ -229,7 +233,7 @@ RULES:
   };
 }
 
-function buildQuoteCardPrompts(inputs: Record<string, unknown>): TemplatePrompts {
+function buildQuoteCardPrompts(inputs: Record<string, unknown>, _artStyle?: ArtStyle): TemplatePrompts {
   const quoteText = inputs.quoteText as string ?? "";
   const author = inputs.author as string | undefined;
   const style = inputs.style as string ?? "elegant";
@@ -269,7 +273,7 @@ RULES:
   };
 }
 
-function buildSplitScreenPrompts(inputs: Record<string, unknown>): TemplatePrompts {
+function buildSplitScreenPrompts(inputs: Record<string, unknown>, _artStyle?: ArtStyle): TemplatePrompts {
   const leftDescription = inputs.leftDescription as string ?? "";
   const rightDescription = inputs.rightDescription as string ?? "";
   const orientation = inputs.orientation as string ?? "horizontal";
@@ -309,7 +313,7 @@ RULES:
   };
 }
 
-function buildListiclePrompts(inputs: Record<string, unknown>): TemplatePrompts {
+function buildListiclePrompts(inputs: Record<string, unknown>, _artStyle?: ArtStyle): TemplatePrompts {
   const topic = inputs.topic as string ?? "";
   const itemCount = inputs.itemCount as number ?? 5;
   const items = inputs.items as string[] | undefined;
@@ -347,7 +351,7 @@ RULES:
   };
 }
 
-function buildPovPrompts(inputs: Record<string, unknown>): TemplatePrompts {
+function buildPovPrompts(inputs: Record<string, unknown>, _artStyle?: ArtStyle): TemplatePrompts {
   const povText = inputs.povText as string ?? "";
   const condition = inputs.condition as string ?? "";
   const avatarMood = inputs.avatarMood as string ?? "natural";
@@ -381,7 +385,7 @@ CRITICAL RULES:
 - Keep the composition clear with space for the POV text overlay at the top
 - Never include fake social media statistics or handles
 - The visual should immediately convey the scenario and the avatar's emotional reaction`,
-    visualGuidance: `POV perspective shot. First-person or over-the-shoulder angle showing the avatar's reaction to "${condition}". The avatar's mood is ${avatarMood}. Cinematic framing with the avatar's face/expression clearly visible. The top of the frame should have clear space for POV text chip overlay.`,
+    visualGuidance: `POV perspective shot. First-person or over-the-shoulder angle showing the avatar's reaction to "${condition}". The avatar's mood is ${avatarMood}. The avatar's face/expression should be clearly visible. The top of the frame should have clear space for POV text chip overlay.`,
     negativeAdditions: [
       "text",
       "words",
@@ -397,7 +401,7 @@ CRITICAL RULES:
   };
 }
 
-function buildAiMusicVideoPrompts(inputs: Record<string, unknown>): TemplatePrompts {
+function buildAiMusicVideoPrompts(inputs: Record<string, unknown>, _artStyle?: ArtStyle): TemplatePrompts {
   const moodOrGenre = inputs.moodOrGenre as string ?? "";
   const visualStyle = inputs.visualStyle as string ?? "abstract";
 
@@ -408,6 +412,20 @@ function buildAiMusicVideoPrompts(inputs: Record<string, unknown>): TemplateProm
     nature: "Landscape photography, natural beauty, organic movement",
     retro: "80s/90s aesthetic, neon grids, VHS effects, synthwave",
   };
+
+  const artStyleMap: Record<string, ArtStyle | null> = {
+    abstract: "abstract",
+    cinematic: "cinematic",
+    anime: "anime",
+    nature: null,
+    retro: "vintage",
+  };
+
+  const mappedStyle = artStyleMap[visualStyle] ?? null;
+  const modifier = getArtStyleModifier(mappedStyle);
+  const guidance = modifier
+    ? `${modifier}. Scenes that flow with the musical energy of "${moodOrGenre}". Emphasize movement, color transitions, and atmospheric visuals. Each scene should feel like a frame from a music video.`
+    : `${styleMap[visualStyle] ?? styleMap.abstract}. Scenes that flow with the musical energy of "${moodOrGenre}". Emphasize movement, color transitions, and atmospheric visuals. Each scene should feel like a frame from a music video.`;
 
   return {
     systemPrompt: `You are creating a music video concept for AI generation.
@@ -422,7 +440,7 @@ RULES:
 - Maintain visual coherence across scenes
 - Focus on movement, color, and atmosphere
 - Never include text or lyrics in the visual descriptions`,
-    visualGuidance: `${styleMap[visualStyle] ?? styleMap.abstract}. Scenes that flow with the musical energy of "${moodOrGenre}". Emphasize movement, color transitions, and atmospheric visuals. Each scene should feel like a frame from a music video.`,
+    visualGuidance: guidance,
     negativeAdditions: [
       "static",
       "boring",
@@ -432,5 +450,6 @@ RULES:
       "corporate",
     ],
     narrationGuidance: "No narration needed — this is a music video. Focus on visual storytelling through imagery and movement.",
+    artStyle: mappedStyle ?? undefined,
   };
 }

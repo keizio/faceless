@@ -61,6 +61,19 @@ export const CREDIT_COSTS = {
   idea: 2,
 } as const;
 
+export const TEMPLATE_MULTIPLIERS: Record<string, number> = {
+  '*': 1.0,
+  'quote-card': 1.0,
+  'fact-card': 1.0,
+  'pov': 1.0,
+  'fake-chat': 1.25,
+  'split-screen': 1.25,
+  'ugc-product-marketing': 1.25,
+  'listicle': 1.5,
+  'storytime-narration': 1.5,
+  'ai-music-video': 1.5,
+};
+
 export const CONTENT_LIMITS = {
   maxProjectsPerUser: 50,
   maxContentsPerProject: 200,

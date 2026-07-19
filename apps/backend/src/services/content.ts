@@ -2,12 +2,13 @@ import { db } from "../db/index.js";
 import { contents, contentVersions, generationJobs, mediaAssets } from "../db/schema.js";
 import { eq, and, inArray, desc, sql, isNull } from "drizzle-orm";
 import { enqueueContentGeneration } from "../queues/content-generation.js";
-import { CREDIT_COSTS } from "@faceless/shared";
+import { CREDIT_COSTS, TEMPLATE_MULTIPLIERS } from "@faceless/shared";
 import { UsageService } from "./usage.js";
 import { CreditTransactionService } from "./credit-transaction.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getR2Client, uploadFile, randomFilename } from "../lib/storage.js";
 import { getProviders } from "../lib/providers/factory.js";
+import { getEffectiveSlideCount } from "../lib/utils/content.js";
 
 export class ContentService {
   async createContent(
@@ -27,7 +28,17 @@ export class ContentService {
     },
   ) {
     const usageService = new UsageService();
-    const cost = CREDIT_COSTS[data.type];
+    const baseCost = CREDIT_COSTS[data.type];
+
+    let templateSurcharge = 0;
+    if (data.templateId) {
+      const multiplier = TEMPLATE_MULTIPLIERS[data.templateId] ?? TEMPLATE_MULTIPLIERS['*'];
+      if (multiplier > 1.0) {
+        templateSurcharge = Math.ceil(baseCost * (multiplier - 1.0));
+      }
+    }
+
+    const cost = baseCost + templateSurcharge;
     const limit = await usageService.checkGenerationLimit(userId, cost);
     if (!limit.allowed) {
       throw new Error(`Insufficient credits. You need ${cost} credits but have ${limit.credits}.`);
@@ -68,6 +79,12 @@ export class ContentService {
       amount: -cost,
       reason: "content_generation",
       referenceId: content.id,
+      metadata: {
+        baseCost,
+        templateId: data.templateId,
+        templateSurcharge,
+        contentType: data.type,
+      },
     });
 
     await enqueueContentGeneration({
@@ -191,6 +208,40 @@ export class ContentService {
 
     if (!content) throw new Error("Content not found");
 
+    const usageService = new UsageService();
+    const baseCost = CREDIT_COSTS[content.type];
+
+    let templateSurcharge = 0;
+    if (content.templateId) {
+      const multiplier = TEMPLATE_MULTIPLIERS[content.templateId] ?? TEMPLATE_MULTIPLIERS['*'];
+      if (multiplier > 1.0) {
+        templateSurcharge = Math.ceil(baseCost * (multiplier - 1.0));
+      }
+    }
+
+    const cost = baseCost + templateSurcharge;
+    const limit = await usageService.checkGenerationLimit(userId, cost);
+    if (!limit.allowed) {
+      throw new Error(`Insufficient credits. You need ${cost} credits but have ${limit.credits}.`);
+    }
+
+    await usageService.deductCredits(userId, cost);
+
+    const creditTransactionService = new CreditTransactionService();
+    await creditTransactionService.logTransaction(userId, {
+      type: "deduction",
+      amount: -cost,
+      reason: "content_generation",
+      referenceId: contentId,
+      metadata: {
+        baseCost,
+        templateId: content.templateId,
+        templateSurcharge,
+        contentType: content.type,
+        reason: "regenerate",
+      },
+    });
+
     const [job] = await db
       .insert(generationJobs)
       .values({
@@ -201,10 +252,7 @@ export class ContentService {
       })
       .returning();
 
-    const slideCount =
-      content.templateId === "listicle"
-        ? ((content.templateInputs as Record<string, unknown> | null)?.itemCount as number) ?? undefined
-        : undefined;
+    const slideCount = getEffectiveSlideCount(content.templateId, content.templateInputs as Record<string, unknown> | null);
 
     await enqueueContentGeneration({
       jobId: job.id,
@@ -219,6 +267,7 @@ export class ContentService {
       slideCount,
       templateId: content.templateId ?? undefined,
       templateInputs: content.templateInputs ?? undefined,
+      cost,
     });
 
     return { job };
@@ -419,10 +468,7 @@ export class ContentService {
 
     if (!content) throw new Error("Content not found");
 
-    const slideCount =
-      content.templateId === "listicle"
-        ? ((content.templateInputs as Record<string, unknown> | null)?.itemCount as number) ?? undefined
-        : undefined;
+    const slideCount = getEffectiveSlideCount(content.templateId, content.templateInputs as Record<string, unknown> | null);
 
     return this.createContent(userId, content.projectId, {
       type: content.type,

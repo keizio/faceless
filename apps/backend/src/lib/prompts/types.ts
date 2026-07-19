@@ -3,7 +3,6 @@ import type { ArtStyle } from "./art-style-detector.js";
 export type { Platform, ContentType };
 export type { ArtStyle };
 
-export type ContentGoal = "awareness" | "engagement" | "conversion" | "education" | "entertainment";
 export type CopywritingFramework = "aida" | "pas" | "fab" | "none";
 export type HeadlineFormula = "how-to" | "list" | "question" | "command" | "curiosity-gap" | "testimonial" | "why" | "secret" | "number-adjective" | "before-after";
 export type CtaPattern = "low-friction" | "benefit-driven" | "urgency" | "command" | "personal" | "curiosity";
@@ -74,7 +73,6 @@ export interface PromptContext {
   brandKit?: BrandKit;
   sceneIndex?: number;
   totalScenes?: number;
-  contentGoal?: ContentGoal;
   copywritingFramework?: CopywritingFramework;
   headlineFormula?: HeadlineFormula;
   ctaPattern?: CtaPattern;

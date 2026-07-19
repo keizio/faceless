@@ -344,9 +344,9 @@ export class DashScopeVideoProvider implements VideoProvider {
 
       const media: { type: string; url: string }[] = [];
       if (avatarReferenceImage && i === 0) {
-        media.push({ type: "first_frame", url: avatarReferenceImage });
+        media.push({ type: "image", url: avatarReferenceImage });
       }
-      media.push({ type: "first_frame", url: scene.url });
+      media.push({ type: "image", url: scene.url });
 
       const body = {
         model: VIDEO_MODEL,
@@ -370,15 +370,19 @@ export class DashScopeVideoProvider implements VideoProvider {
 
       if (taskId) {
         const polled = await pollDashScopeTask(taskId);
-        videoUrl = (polled as { video_url?: string }).video_url;
+        const polledRecord = polled as Record<string, unknown>;
+        videoUrl = (polledRecord.video_url as string) ?? (polledRecord.output_url as string) ?? ((polledRecord.results as { url?: string }[] | undefined)?.[0]?.url);
       } else if (output) {
-        videoUrl = (output as { video_url?: string }).video_url;
+        const outputRecord = output as Record<string, unknown>;
+        videoUrl = (outputRecord.video_url as string) ?? (outputRecord.output_url as string) ?? ((outputRecord.results as { url?: string }[] | undefined)?.[0]?.url);
       }
 
-      if (videoUrl) {
-        const storedUrl = await downloadAndStoreVideoUrl(videoUrl);
-        videoUrls.push(storedUrl);
+      if (!videoUrl) {
+        throw new Error(`DashScope video generation failed for scene ${i + 1}: no video URL in response`);
       }
+
+      const storedUrl = await downloadAndStoreVideoUrl(videoUrl);
+      videoUrls.push(storedUrl);
 
       onProgress?.(videoUrls.length, sceneImages.length);
     }

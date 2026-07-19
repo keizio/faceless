@@ -3,9 +3,9 @@ import { z } from "zod";
 import { getProviders } from "../../lib/providers/factory.js";
 import { getImageSize } from "../../lib/providers/dashscope.js";
 
-export const dashscopeImageTool = createTool({
-  id: "dashscope-image",
-  description: "Generate images using DashScope (Wan) or OpenRouter with enhanced prompt support",
+export const imageGenerationTool = createTool({
+  id: "image-generation",
+  description: "Generate images using the configured AI provider with enhanced prompt support",
   inputSchema: z.object({
     prompt: z.string().describe("Image generation prompt (can be enhanced with camera direction)"),
     aspectRatio: z

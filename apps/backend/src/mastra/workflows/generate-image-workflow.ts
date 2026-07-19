@@ -9,31 +9,23 @@ import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { insertMediaAsset } from "../../lib/media.js";
-import { eq } from "drizzle-orm";
+import { eq, max } from "drizzle-orm";
 import type { Platform, ContentType, BrandKit } from "@faceless/shared";
 import type { EnhancedPrompt, ArtStyle } from "../../lib/prompts/types.js";
 import {
   renderChatTemplate,
-  renderFactCardTemplate,
-  renderQuoteCardTemplate,
   renderSplitScreenTemplate,
-  renderPovOverlay,
 } from "../../lib/compositing/renderer.js";
+import { templateOverlayToTextLayers } from "../../lib/compositing/overlay-to-layers.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
 import { applyWatermarkToBuffer } from "../../lib/compositing/watermark.js";
 import { mastra } from "../../mastra/index.js";
 import { parseJsonResponse } from "../../lib/prompts/parse-json.js";
 import {
-  renderAidaFramework,
   renderHeadlineFormula,
   renderCtaPattern,
   renderToneByChannel,
 } from "../../lib/prompts/copywriting-frameworks.js";
-import {
-  buildPromptEnhancerSystemPrompt,
-  buildCaptionGeneratorSystemPrompt,
-  buildQualityReviewerSystemPrompt,
-} from "../../lib/prompts/system-prompts.js";
 import type { CopywritingFramework, HeadlineFormula, CtaPattern } from "../../lib/prompts/types.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
@@ -59,6 +51,8 @@ const imageInputSchema = z.object({
   templateNarrationGuidance: z.string().optional(),
   templateId: z.string().optional(),
   templateInputs: z.record(z.unknown()).optional(),
+  templateFramework: z.string().optional(),
+  templateCtaPattern: z.string().optional(),
 });
 
 const enhanceImagePromptStep = createStep({
@@ -81,6 +75,8 @@ const enhanceImagePromptStep = createStep({
     promptMetadata: z.any(),
     templateVisualGuidance: z.string().optional(),
     templateNegativeAdditions: z.array(z.string()).optional(),
+    templateFramework: z.string().optional(),
+    templateCtaPattern: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
   }),
@@ -164,6 +160,8 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
       },
       templateVisualGuidance: inputData.templateVisualGuidance,
       templateNegativeAdditions: inputData.templateNegativeAdditions,
+      templateFramework: inputData.templateFramework,
+      templateCtaPattern: inputData.templateCtaPattern,
       templateId: inputData.templateId,
       templateInputs: inputData.templateInputs,
     };
@@ -191,14 +189,18 @@ const generateImageScriptStep = createStep({
     templateVisualGuidance: z.string().optional(),
     templateNegativeAdditions: z.array(z.string()).optional(),
     templateScriptStructure: z.string().optional(),
-    templateId: z.string().optional(),
+templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
+    templateFramework: z.string().optional(),
+    templateCtaPattern: z.string().optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
     enhancedPrompt: z.string(),
     aspectRatio: z.string(),
+    platform: z.string(),
+    prompt: z.string(),
     promptMetadata: z.any(),
     script: z.string(),
     caption: z.string(),
@@ -216,8 +218,8 @@ const generateImageScriptStep = createStep({
 
     const platform = inputData.platform as Platform;
     const toneSection = renderToneByChannel(platform);
-    const headline: HeadlineFormula = "curiosity-gap";
-    const cta: CtaPattern = "low-friction";
+    const headline: HeadlineFormula = "curiosity-gap" as HeadlineFormula;
+    const cta: CtaPattern = (inputData.templateCtaPattern ?? "low-friction") as CtaPattern;
 
     const sections: string[] = [
       `Write a social media caption for this ${inputData.platform} image post about: ${inputData.prompt}`,
@@ -272,10 +274,14 @@ const generateImageScriptStep = createStep({
       enhancedPrompt: inputData.enhancedPrompt,
       aspectRatio: inputData.aspectRatio,
       language: inputData.language,
+      platform: inputData.platform,
+      prompt: inputData.prompt,
       promptMetadata: inputData.promptMetadata,
       script,
       caption,
       brandKitJson: inputData.brandKitJson,
+      templateFramework: inputData.templateFramework,
+      templateCtaPattern: inputData.templateCtaPattern,
       templateId: inputData.templateId,
       templateInputs: inputData.templateInputs,
     };
@@ -288,12 +294,16 @@ const imageScriptOutputSchema = z.object({
   enhancedPrompt: z.string(),
   aspectRatio: z.string(),
   language: z.string(),
+  platform: z.string(),
+  prompt: z.string(),
   promptMetadata: z.any(),
   script: z.string(),
   caption: z.string(),
   brandKitJson: z.string().optional(),
   templateId: z.string().optional(),
   templateInputs: z.record(z.unknown()).optional(),
+  templateFramework: z.string().optional(),
+  templateCtaPattern: z.string().optional(),
   reviewScore: z.number().optional(),
   reviewFeedback: z.array(z.string()).optional(),
 });
@@ -312,7 +322,7 @@ const reviewImageScriptStep = createStep({
 
     const reviewMessage = `Review this social media image content:
 
-Platform: ${inputData.promptMetadata?.context?.platform ?? "generic"}
+Platform: ${inputData.platform}
 
 Script:
 ${inputData.script}
@@ -351,7 +361,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
 
         if (attempt < MAX_REVIEW_RETRIES) {
           const regenSections: string[] = [
-            `Rewrite a social media caption for a ${inputData.promptMetadata?.context?.platform ?? "generic"} image post about: ${inputData.promptMetadata?.context?.avatarName ?? "the topic"}`,
+            `Rewrite a social media caption for a ${inputData.platform} image post about: ${inputData.prompt ?? "the topic"}`,
             `Language: ${inputData.language}`,
             `Improve on these points:`,
             ...feedback.map((f) => `- ${f}`),
@@ -415,6 +425,8 @@ const generateImageStep = createStep({
     userId: z.string(),
     enhancedPrompt: z.string(),
     aspectRatio: z.string(),
+    platform: z.string(),
+    prompt: z.string(),
     language: z.string(),
     promptMetadata: z.any(),
     script: z.string(),
@@ -422,6 +434,8 @@ const generateImageStep = createStep({
     brandKitJson: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
+    templateFramework: z.string().optional(),
+    templateCtaPattern: z.string().optional(),
     reviewScore: z.number().optional(),
     reviewFeedback: z.array(z.string()).optional(),
   }),
@@ -549,13 +563,15 @@ const compositeImageStep = createStep({
     compositedImageUrls: z.array(z.string()),
     script: z.string(),
     caption: z.string(),
+    textLayers: z.record(z.array(z.any())).optional(),
   }),
   execute: async ({ inputData }) => {
     const { templateId, templateInputs, imageUrls, aspectRatio } = inputData;
 
     let resultUrls: string[] = imageUrls;
+    let textLayers: Record<string, unknown[]> | undefined;
 
-    if (!templateId || !templateInputs) {
+    if (!templateId || !templateInputs || Object.keys(templateInputs).length === 0) {
       resultUrls = imageUrls;
     } else {
       const compositedUrls: string[] = [];
@@ -568,25 +584,11 @@ const compositeImageStep = createStep({
           break;
         }
 
-        case "fact-card": {
-          let bgBuffer: Buffer | undefined;
-          if (imageUrls.length > 0) {
-            bgBuffer = await downloadImageAsBuffer(imageUrls[0]);
-          }
-          const buffer = await renderFactCardTemplate(templateInputs, aspectRatio, bgBuffer);
-          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-          compositedUrls.push(url);
-          break;
-        }
-
-        case "quote-card": {
-          let bgBuffer: Buffer | undefined;
-          if (imageUrls.length > 0) {
-            bgBuffer = await downloadImageAsBuffer(imageUrls[0]);
-          }
-          const buffer = await renderQuoteCardTemplate(templateInputs, aspectRatio, bgBuffer);
-          const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-          compositedUrls.push(url);
+        case "fact-card":
+        case "quote-card":
+        case "pov": {
+          textLayers = templateOverlayToTextLayers(templateId, templateInputs, aspectRatio) as unknown as Record<string, unknown[]>;
+          resultUrls = imageUrls;
           break;
         }
 
@@ -599,15 +601,9 @@ const compositeImageStep = createStep({
           const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
           const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedUrls.push(url);
-          break;
-        }
-
-        case "pov": {
-          for (const imageUrl of imageUrls) {
-            const bgBuffer = await downloadImageAsBuffer(imageUrl);
-            const buffer = await renderPovOverlay(templateInputs, aspectRatio, bgBuffer);
-            const url = await uploadFile(buffer, randomFilename("png"), "image/png");
-            compositedUrls.push(url);
+          const labelLayers = templateOverlayToTextLayers(templateId, templateInputs, aspectRatio);
+          if (Object.keys(labelLayers).length > 0) {
+            textLayers = labelLayers as unknown as Record<string, unknown[]>;
           }
           break;
         }
@@ -619,8 +615,6 @@ const compositeImageStep = createStep({
 
       if (compositedUrls.length > 0) {
         resultUrls = compositedUrls;
-      } else if (!resultUrls) {
-        resultUrls = imageUrls;
       }
     }
 
@@ -632,14 +626,14 @@ const compositeImageStep = createStep({
     } catch {}
 
     if (brandKit?.logoUrl && resultUrls.length > 0) {
-      const watermarkedUrls: string[] = [];
-      for (const url of resultUrls) {
-        const response = await fetch(url);
-        const buffer = Buffer.from(await response.arrayBuffer());
-        const watermarked = await applyWatermarkToBuffer(buffer, brandKit.logoUrl);
-        const newUrl = await uploadFile(watermarked, randomFilename("png"), "image/png");
-        watermarkedUrls.push(newUrl);
-      }
+      const watermarkedUrls = await Promise.all(
+        resultUrls.map(async (url) => {
+          const response = await fetch(url);
+          const buffer = Buffer.from(await response.arrayBuffer());
+          const watermarked = await applyWatermarkToBuffer(buffer, brandKit.logoUrl!);
+          return await uploadFile(watermarked, randomFilename("png"), "image/png");
+        }),
+      );
       resultUrls = watermarkedUrls;
     }
 
@@ -649,6 +643,7 @@ const compositeImageStep = createStep({
       compositedImageUrls: resultUrls,
       script: inputData.script,
       caption: inputData.caption,
+      textLayers,
     };
   },
 });
@@ -662,6 +657,7 @@ const saveImageVersionStep = createStep({
     compositedImageUrls: z.array(z.string()),
     script: z.string(),
     caption: z.string(),
+    textLayers: z.record(z.array(z.any())).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -671,14 +667,12 @@ const saveImageVersionStep = createStep({
     caption: z.string(),
   }),
   execute: async ({ inputData }) => {
-    const existingVersions = await db.query.contentVersions.findMany({
-      where: eq(contentVersions.contentId, inputData.contentId),
-      columns: { versionNumber: true },
-    });
+    const [maxVersion] = await db
+      .select({ versionNumber: max(contentVersions.versionNumber) })
+      .from(contentVersions)
+      .where(eq(contentVersions.contentId, inputData.contentId));
 
-    const versionNumber = existingVersions.length > 0
-      ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1
-      : 1;
+    const versionNumber = (maxVersion?.versionNumber ?? 0) + 1;
     const outputUrl = inputData.compositedImageUrls[0] ?? null;
 
     const [version] = await db
@@ -693,6 +687,7 @@ const saveImageVersionStep = createStep({
           caption: inputData.caption,
           script: inputData.script,
           ...(inputData.compositedImageUrls.length > 0 ? { images: inputData.compositedImageUrls } : {}),
+          ...(inputData.textLayers ? { textLayers: inputData.textLayers } : {}),
         },
       })
       .returning();

@@ -7,7 +7,6 @@ import type {
 import { detectArtStyle, getArtStyleModifier } from "./art-style-detector.js";
 import type { BrandKit } from "@faceless/shared";
 import { buildAvatarContext, renderAvatarForVisual, renderNoAvatarGuidance } from "./avatar-injector.js";
-import { getNegativePrompt } from "./negative-prompts.js";
 import { PLATFORM_STRATEGIES } from "./platform-strategies.js";
 import { renderCameraDirection, cameraDirectionForScene } from "./camera-dsl.js";
 import { db } from "../../db/index.js";
@@ -133,13 +132,6 @@ const cameraText = renderCameraDirection(camera);
   }
 
   const platformStrategy = PLATFORM_STRATEGIES[context.platform];
-
-  if (context.avatar) {
-    const avatarVisual = renderAvatarForVisual(context.avatar);
-    sections.push(`Character: ${avatarVisual}`);
-  } else {
-    sections.push(renderNoAvatarGuidance());
-  }
 
   sections.push(`Composition: ${platformStrategy.compositionGuidance}`);
 

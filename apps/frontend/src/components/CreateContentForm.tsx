@@ -6,7 +6,7 @@ import { useCreateContent } from "@/hooks/useContents";
 import { useProjects } from "@/hooks/useProjects";
 import { useAvatars } from "@/hooks/useAvatars";
 import { useUserProfile } from "@/hooks/useUserProfile";
-import { PLATFORM_SPECS, LANGUAGES } from "@faceless/shared";
+import { PLATFORM_SPECS, LANGUAGES, CREDIT_COSTS, TEMPLATE_MULTIPLIERS } from "@faceless/shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,6 +105,32 @@ export function CreateContentForm({ onSuccess, initialValues }: CreateContentFor
 
   const platformSpecs = PLATFORM_SPECS[platform as keyof typeof PLATFORM_SPECS];
   const aspectRatios = platformSpecs?.aspectRatios ?? ["16:9"];
+
+  const getContentTypeLabel = (type?: string) => {
+    if (!type) return "";
+    const labels: Record<string, string> = {
+      text: "Text",
+      image: "Image",
+      slide: "Slide",
+      video: "Video",
+    };
+    return labels[type] ?? type;
+  };
+
+  const calculateEstimatedCost = () => {
+    if (!type) return null;
+    
+    const baseCost = CREDIT_COSTS[type];
+    // No template multiplier in basic form, but we show the base cost
+    
+    return {
+      baseCost,
+      templateSurcharge: 0,
+      total: baseCost,
+    };
+  };
+
+  const estimatedCost = calculateEstimatedCost();
 
   const handlePlatformChange = (newPlatform: string | null) => {
     if (!newPlatform) return;
@@ -344,6 +370,18 @@ export function CreateContentForm({ onSuccess, initialValues }: CreateContentFor
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Cost breakdown */}
+          {estimatedCost && (
+            <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
+              <span className="text-xs text-muted-foreground">
+                Estimated cost: {estimatedCost.baseCost} credit{estimatedCost.baseCost !== 1 ? "s" : ""} ({getContentTypeLabel(type ?? undefined)})
+              </span>
+              <span className="text-xs font-semibold text-primary">
+                {estimatedCost.total} credits
+              </span>
             </div>
           )}
 

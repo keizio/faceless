@@ -4,6 +4,8 @@ import { contents, generationJobs, users } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { NotificationService } from "../services/notification.js";
 import { buildTemplatePrompt } from "../lib/templates/prompt-builder.js";
+import { detectArtStyle } from "../lib/prompts/art-style-detector.js";
+import { getEffectiveSlideCount } from "../lib/utils/content.js";
 import type { GenerationJobPayload } from "../lib/queue.js";
 
 const WORKFLOW_TIMEOUT = 600_000;
@@ -62,9 +64,11 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
       language = user?.language ?? "en";
     }
 
+    const detectedArtStyle = detectArtStyle(prompt ?? "");
+
     let templatePrompts = null;
     if (payload.templateId && payload.templateInputs) {
-      templatePrompts = buildTemplatePrompt(payload.templateId, payload.templateInputs);
+      templatePrompts = buildTemplatePrompt(payload.templateId, payload.templateInputs, detectedArtStyle ?? undefined);
     }
 
     const templateOverrides = templatePrompts
@@ -74,6 +78,9 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
           templateNegativeAdditions: templatePrompts.negativeAdditions,
           templateScriptStructure: templatePrompts.scriptStructure,
           templateNarrationGuidance: templatePrompts.narrationGuidance,
+          templateFramework: templatePrompts.framework,
+          templateCtaPattern: templatePrompts.ctaPattern,
+          artStyle: templatePrompts.artStyle,
         }
       : {};
 
@@ -122,6 +129,7 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
                 visualStyle: (ti.visualStyle as string) ?? "cinematic",
                 audioSource: (ti.audioSource as "ai-generated" | "upload") ?? "ai-generated",
                 audioFileUrl: (ti.audioFile as string) ?? undefined,
+                ...templateOverrides,
               },
             }),
             WORKFLOW_TIMEOUT,
@@ -160,10 +168,7 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
       }
 
       case "slide": {
-        let slideCount = payload.slideCount ?? 3;
-        if (payload.templateId === "listicle") {
-          slideCount = (payload.templateInputs?.itemCount as number) ?? 5;
-        }
+        let slideCount = getEffectiveSlideCount(payload.templateId, payload.templateInputs, payload.slideCount ?? 3) ?? 3;
 
         const workflow = mastra.getWorkflow("generateContentWorkflow");
         const run = await workflow.createRunAsync();

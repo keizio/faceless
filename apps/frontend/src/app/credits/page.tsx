@@ -60,6 +60,22 @@ function formatAmount(amount: number): string {
   return `${prefix}${amount.toLocaleString()}`;
 }
 
+function formatReasonWithDetails(transaction: CreditTransaction): string {
+  const baseLabel = REASON_LABELS[transaction.reason] ?? transaction.reason;
+  const metadata = transaction.metadata as Record<string, unknown>;
+  
+  if (transaction.reason === "content_generation" && metadata) {
+    const templateSurcharge = metadata.templateSurcharge as number | undefined;
+    const templateId = metadata.templateId as string | undefined;
+    
+    if (templateSurcharge && templateSurcharge > 0) {
+      return `${baseLabel} (${templateId})`;
+    }
+  }
+  
+  return baseLabel;
+}
+
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("en-US", {
@@ -79,6 +95,24 @@ function TransactionRow({
   const config = TYPE_CONFIG[transaction.type] ?? TYPE_CONFIG.adjustment;
   const Icon = config.icon;
   const isPositive = transaction.amount > 0;
+  const metadata = transaction.metadata as Record<string, unknown> | undefined;
+  const templateSurcharge = metadata?.templateSurcharge as number | undefined;
+  const baseCost = metadata?.baseCost as number | undefined;
+  const contentType = metadata?.contentType as string | undefined;
+  const regenerateReason = metadata?.reason === "regenerate";
+
+  const getContentTypeLabel = (type?: string) => {
+    if (!type) return "";
+    const labels: Record<string, string> = {
+      text: "Text",
+      image: "Image",
+      slide: "Slide",
+      video: "Video",
+    };
+    return labels[type] ?? type;
+  };
+
+  const displayLabel = formatReasonWithDetails(transaction);
 
   return (
     <div className="flex items-center gap-4 border-b border-border/50 py-3 last:border-0">
@@ -90,7 +124,7 @@ function TransactionRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">
-            {REASON_LABELS[transaction.reason] ?? transaction.reason}
+            {displayLabel}
           </span>
           <Badge
             variant={
@@ -104,7 +138,27 @@ function TransactionRow({
           >
             {config.label}
           </Badge>
+          {regenerateReason && (
+            <Badge variant="secondary" className="text-[10px]">
+              Regenerate
+            </Badge>
+          )}
         </div>
+        {(templateSurcharge || baseCost || contentType) && (
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            {baseCost !== undefined && (
+              <>
+                <span>{getContentTypeLabel(contentType)}: {baseCost} credit{baseCost !== 1 ? "s" : ""}</span>
+                {templateSurcharge && templateSurcharge > 0 && (
+                  <>
+                    <span>•</span>
+                    <span className="text-orange-500">Template +{templateSurcharge}</span>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
         <p className="mt-0.5 text-xs text-muted-foreground">
           {formatDate(transaction.createdAt)}
         </p>

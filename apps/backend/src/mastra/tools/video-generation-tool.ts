@@ -2,9 +2,9 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { getProviders } from "../../lib/providers/factory.js";
 
-export const dashscopeVideoTool = createTool({
-  id: "dashscope-video",
-  description: "Generate videos using DashScope (HappyHorse) or OpenRouter with avatar reference and camera direction",
+export const videoGenerationTool = createTool({
+  id: "video-generation",
+  description: "Generate videos using the configured AI provider with avatar reference and camera direction",
   inputSchema: z.object({
     scenes: z.array(
       z.object({

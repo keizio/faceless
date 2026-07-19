@@ -14,7 +14,7 @@ import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { insertMediaAsset } from "../../lib/media.js";
-import { eq } from "drizzle-orm";
+import { eq, max } from "drizzle-orm";
 import type { Platform, ContentType, BrandKit } from "@faceless/shared";
 import type { EnhancedPrompt, ArtStyle } from "../../lib/prompts/types.js";
 import {
@@ -41,12 +41,18 @@ import { buildStoryBibleUserMessage, parseStoryBibleResponse } from "../../lib/p
 import { buildContinuityCheckUserMessage, parseContinuityCheckResponse } from "../../lib/prompts/continuity-checker.js";
 import { assembleContinuityPrompt } from "../../lib/prompts/continuity-prompt-builder.js";
 
+const imageBufferCache = new Map<string, Buffer>();
+
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
+  const cached = imageBufferCache.get(url);
+  if (cached) return cached;
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to download image from ${url}: ${response.status}`);
   }
-  return Buffer.from(await response.arrayBuffer());
+  const buffer = Buffer.from(await response.arrayBuffer());
+  imageBufferCache.set(url, buffer);
+  return buffer;
 }
 
 const videoInputSchema = z.object({
@@ -63,8 +69,10 @@ const videoInputSchema = z.object({
   templateNegativeAdditions: z.array(z.string()).optional(),
   templateScriptStructure: z.string().optional(),
   templateNarrationGuidance: z.string().optional(),
-  templateInputs: z.record(z.unknown()).optional(),
-  templateId: z.string().optional(),
+templateInputs: z.record(z.unknown()).optional(),
+    templateFramework: z.string().optional(),
+    templateCtaPattern: z.string().optional(),
+    templateId: z.string().optional(),
 });
 
 const enhanceVideoPromptStep = createStep({
@@ -93,6 +101,8 @@ const enhanceVideoPromptStep = createStep({
     templateScriptStructure: z.string().optional(),
     templateNarrationGuidance: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
+    templateFramework: z.string().optional(),
+    templateCtaPattern: z.string().optional(),
     templateId: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
@@ -188,6 +198,8 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
       templateScriptStructure: inputData.templateScriptStructure,
       templateNarrationGuidance: inputData.templateNarrationGuidance,
       templateInputs: inputData.templateInputs,
+      templateFramework: inputData.templateFramework,
+      templateCtaPattern: inputData.templateCtaPattern,
       templateId: inputData.templateId,
     };
   },
@@ -218,6 +230,8 @@ const generateVideoScriptStep = createStep({
     templateScriptStructure: z.string().optional(),
     templateNarrationGuidance: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
+    templateFramework: z.string().optional(),
+    templateCtaPattern: z.string().optional(),
     templateId: z.string().optional(),
   }),
   outputSchema: z.object({
@@ -237,7 +251,9 @@ const generateVideoScriptStep = createStep({
     narrationText: z.string(),
     sceneNarrations: z.array(z.string()),
     brandKitJson: z.string().optional(),
-    templateInputs: z.record(z.unknown()).optional(),
+templateInputs: z.record(z.unknown()).optional(),
+    templateFramework: z.string().optional(),
+    templateCtaPattern: z.string().optional(),
     templateId: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
@@ -249,9 +265,9 @@ const generateVideoScriptStep = createStep({
     const agent = mastra.getAgent("scriptWriter");
 
     const platform = inputData.platform as Platform;
-    const framework: CopywritingFramework = "aida";
-    const headline: HeadlineFormula = "curiosity-gap";
-    const cta: CtaPattern = "low-friction";
+    const framework: CopywritingFramework = (inputData.templateFramework ?? "aida") as CopywritingFramework;
+    const headline: HeadlineFormula = "curiosity-gap" as HeadlineFormula;
+    const cta: CtaPattern = (inputData.templateCtaPattern ?? "low-friction") as CtaPattern;
 
     const sections: string[] = [
       `Create a ${inputData.sceneCount}-scene video script for ${inputData.platform} about: ${inputData.prompt}`,
@@ -351,6 +367,8 @@ const generateVideoScriptStep = createStep({
       sceneNarrations,
       brandKitJson: inputData.brandKitJson,
       templateInputs: inputData.templateInputs,
+      templateFramework: inputData.templateFramework,
+      templateCtaPattern: inputData.templateCtaPattern,
       templateId: inputData.templateId,
     };
   },
@@ -373,11 +391,11 @@ const videoScriptOutputSchema = z.object({
   narrationText: z.string(),
   sceneNarrations: z.array(z.string()),
   brandKitJson: z.string().optional(),
-  templateInputs: z.record(z.unknown()).optional(),
-  templateId: z.string().optional(),
-  reviewScore: z.number().optional(),
-  reviewFeedback: z.array(z.string()).optional(),
-});
+templateInputs: z.record(z.unknown()).optional(),
+    templateFramework: z.string().optional(),
+    templateCtaPattern: z.string().optional(),
+    templateId: z.string().optional(),
+  });
 
 const MAX_REVIEW_RETRIES = 2;
 const MIN_ACCEPTABLE_SCORE = 6;
@@ -723,33 +741,37 @@ const generateVideoImagesStep = createStep({
     const continuityCheckedPrompts = inputData.continuityCheckedPrompts;
     const scenePrompts = continuityCheckedPrompts ?? enhanced.scenePrompts;
 
-    for (let i = 0; i < inputData.sceneCount; i++) {
-      const scenePrompt = scenePrompts[i] ?? enhanced.visualPrompt;
+    const sceneResults = await Promise.all(
+      Array.from({ length: inputData.sceneCount }, async (_, i) => {
+        const scenePrompt = scenePrompts[i] ?? enhanced.visualPrompt;
 
-      const negativePrompt = getNegativePrompt(contextData.platform as Platform);
-      const imageUrl = await getProviders().image.generate(scenePrompt, size, undefined, { negativePrompt, qualityTags: enhanced.qualityTags });
+        const negativePrompt = getNegativePrompt(contextData.platform as Platform);
+        const imageUrl = await getProviders().image.generate(scenePrompt, size, undefined, { negativePrompt, qualityTags: enhanced.qualityTags });
 
-      await insertMediaAsset({
-        userId: inputData.userId,
-        contentId: inputData.contentId,
-        type: "image",
-        url: imageUrl,
-        provider: process.env.AI_IMAGE_PROVIDER ?? "dashscope",
-        metadata: {
-          prompt: scenePrompt,
-          size,
-          scene: i + 1,
-          totalScenes: inputData.sceneCount,
-          hasAvatar: contextData.hasAvatar,
-        },
-      });
+        await insertMediaAsset({
+          userId: inputData.userId,
+          contentId: inputData.contentId,
+          type: "image",
+          url: imageUrl,
+          provider: process.env.AI_IMAGE_PROVIDER ?? "dashscope",
+          metadata: {
+            prompt: scenePrompt,
+            size,
+            scene: i + 1,
+            totalScenes: inputData.sceneCount,
+            hasAvatar: contextData.hasAvatar,
+          },
+        });
 
-      scenes.push({
-        url: imageUrl,
-        description: `Scene ${i + 1}`,
-        scenePrompt,
-      });
-    }
+        return {
+          url: imageUrl,
+          description: `Scene ${i + 1}`,
+          scenePrompt,
+        };
+      }),
+    );
+
+    scenes.push(...sceneResults);
 
     return {
       contentId: inputData.contentId,
@@ -912,15 +934,15 @@ const compositeVideoSceneStep = createStep({
     } catch {}
 
     if (brandKit?.logoUrl && resultScenes.length > 0) {
-      const watermarkedScenes: { url: string; description: string; scenePrompt: string }[] = [];
-      for (const scene of resultScenes) {
-        const response = await fetch(scene.url);
-        const buffer = Buffer.from(await response.arrayBuffer());
-        const watermarked = await applyWatermarkToBuffer(buffer, brandKit.logoUrl);
-        const newUrl = await uploadFile(watermarked, randomFilename("png"), "image/png");
-        watermarkedScenes.push({ ...scene, url: newUrl });
-      }
-      resultScenes = watermarkedScenes;
+      resultScenes = await Promise.all(
+        resultScenes.map(async (scene) => {
+          const response = await fetch(scene.url);
+          const buffer = Buffer.from(await response.arrayBuffer());
+          const watermarked = await applyWatermarkToBuffer(buffer, brandKit.logoUrl!);
+          const newUrl = await uploadFile(watermarked, randomFilename("png"), "image/png");
+          return { ...scene, url: newUrl };
+        }),
+      );
     }
 
     return {
@@ -987,10 +1009,15 @@ const generateVoiceoverStep = createStep({
     const audioProvider = getProviders().audio;
 
     if (inputData.sceneNarrations.length > 0) {
-      const sceneAudios: { url: string; durationMs: number }[] = [];
+      const audioResults = await Promise.all(
+        inputData.sceneNarrations.map(async (narration) => {
+          const audioResult = await audioProvider.generate(narration);
+          return { narration, audioResult };
+        }),
+      );
 
-      for (const narration of inputData.sceneNarrations) {
-        const audioResult = await audioProvider.generate(narration);
+      const sceneAudios: { url: string; durationMs: number }[] = [];
+      for (const { audioResult } of audioResults) {
         sceneAudios.push({ url: audioResult.url, durationMs: audioResult.durationMs });
 
         await insertMediaAsset({
@@ -1153,14 +1180,7 @@ const composeVideoAudioStep = createStep({
   }),
   execute: async ({ inputData }) => {
     if (inputData.videoUrls.length === 0) {
-      return {
-        contentId: inputData.contentId,
-        userId: inputData.userId,
-        videoUrls: inputData.videoUrls,
-        script: inputData.script,
-        caption: inputData.caption,
-        audioUrl: inputData.audioUrl,
-      };
+      throw new Error("No video URLs generated — cannot compose video with audio");
     }
 
     let compositedUrl: string;
@@ -1226,21 +1246,23 @@ inputSchema: z.object({
     audioUrl: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
-    const existingVersions = await db.query.contentVersions.findMany({
-      where: eq(contentVersions.contentId, inputData.contentId),
-      columns: { versionNumber: true },
-    });
+    if (inputData.videoUrls.length === 0 || !inputData.videoUrls[0]) {
+      throw new Error("No video URLs to save — video generation produced no output");
+    }
 
-    const versionNumber = existingVersions.length > 0
-      ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1
-      : 1;
+    const [maxVersion] = await db
+      .select({ versionNumber: max(contentVersions.versionNumber) })
+      .from(contentVersions)
+      .where(eq(contentVersions.contentId, inputData.contentId));
+
+    const versionNumber = (maxVersion?.versionNumber ?? 0) + 1;
 
     const [version] = await db
       .insert(contentVersions)
       .values({
         contentId: inputData.contentId,
         versionNumber,
-        outputUrl: inputData.videoUrls[0] ?? null,
+        outputUrl: inputData.videoUrls[0],
         thumbnailUrl: null,
         metadata: {
           type: "video",

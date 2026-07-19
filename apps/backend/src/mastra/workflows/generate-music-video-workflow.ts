@@ -10,7 +10,7 @@ import { getNegativePrompt } from "../../lib/prompts/negative-prompts.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { insertMediaAsset } from "../../lib/media.js";
-import { eq } from "drizzle-orm";
+import { eq, max } from "drizzle-orm";
 import type { Platform, ContentType } from "@faceless/shared";
 import type { EnhancedPrompt } from "../../lib/prompts/types.js";
 import { composeVideoWithAudio } from "../../lib/compositing/video-composer.js";
@@ -425,14 +425,12 @@ const saveMusicVideoVersionStep = createStep({
     audioUrl: z.string(),
   }),
   execute: async ({ inputData }) => {
-    const existingVersions = await db
-      .select({ versionNumber: contentVersions.versionNumber })
+    const [maxVersion] = await db
+      .select({ versionNumber: max(contentVersions.versionNumber) })
       .from(contentVersions)
       .where(eq(contentVersions.contentId, inputData.contentId));
 
-    const nextVersion = existingVersions.length > 0
-      ? Math.max(...existingVersions.map((v) => v.versionNumber)) + 1
-      : 1;
+    const nextVersion = (maxVersion?.versionNumber ?? 0) + 1;
 
     const [version] = await db
       .insert(contentVersions)
