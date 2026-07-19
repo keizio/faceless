@@ -7,6 +7,7 @@ import {
   qualityReviewerAgent,
   promptEnhancerAgent,
   ideaGeneratorAgent,
+  continuityCheckerAgent,
 } from "../agents/index.js";
 
 import { generateImageWorkflow } from "./workflows/generate-image-workflow.js";
@@ -23,6 +24,7 @@ export const mastra: Mastra = new Mastra({
     qualityReviewer: qualityReviewerAgent,
     promptEnhancer: promptEnhancerAgent,
     ideaGenerator: ideaGeneratorAgent,
+    continuityChecker: continuityCheckerAgent,
   },
   workflows: {
     generateImageWorkflow,

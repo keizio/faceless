@@ -11,7 +11,7 @@ import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { insertMediaAsset } from "../../lib/media.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType, BrandKit } from "@faceless/shared";
-import type { EnhancedPrompt } from "../../lib/prompts/types.js";
+import type { EnhancedPrompt, ArtStyle } from "../../lib/prompts/types.js";
 import {
   renderChatTemplate,
   renderFactCardTemplate,
@@ -111,6 +111,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
         visualPrompt?: string;
         cameraDirection?: EnhancedPrompt["cameraDirection"];
         qualityTags?: string[];
+        artStyle?: ArtStyle;
       }>(result);
       enhanced = {
         visualPrompt: parsed.visualPrompt ?? inputData.prompt,
@@ -120,6 +121,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
         },
         qualityTags: parsed.qualityTags ?? [],
         negativePrompt: "",
+        artStyle: parsed.artStyle,
       };
     } catch {
       enhanced = {
@@ -130,6 +132,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
         },
         qualityTags: [],
         negativePrompt: "",
+        artStyle: undefined,
       };
     }
 

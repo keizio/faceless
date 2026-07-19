@@ -8,6 +8,8 @@ import { SPEECH_STYLE_LABELS, GENDER_OPTIONS, AGE_RANGES } from "@faceless/share
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -16,9 +18,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { User } from "lucide-react";
+import { User, Upload, Loader2 } from "lucide-react";
 
 const SPEECH_STYLES = Object.keys(SPEECH_STYLE_LABELS);
 
@@ -30,6 +33,9 @@ export default function NewAvatarPage() {
   const [gender, setGender] = useState("");
   const [speechStyle, setSpeechStyle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState("");
 
   const handleCreate = () => {
     if (!name.trim()) return;
@@ -40,6 +46,7 @@ export default function NewAvatarPage() {
         gender: gender || undefined,
         speechStyle: speechStyle || undefined,
         referenceImageUrl: imageUrl || undefined,
+        customPrompt: customPrompt.trim() || undefined,
       },
       {
         onSuccess: (avatar) => {
@@ -140,15 +147,65 @@ export default function NewAvatarPage() {
                   {/* Reference Image */}
                   <div>
                     <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                      Reference Image URL <span className="text-muted-foreground/50">(optional)</span>
+                      Reference Image <span className="text-muted-foreground/50">(optional)</span>
                     </label>
-                    <Input
-                      type="url"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://cdn.solutip.com/..."
-                      className="h-9 text-sm"
+                    <div className="flex items-center gap-3">
+                      <Label
+                        htmlFor="avatar-image-upload"
+                        className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border/60 px-4 py-3 text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
+                      >
+                        <Upload className="h-4 w-4" />
+                        {imageFile ? imageFile.name : "Upload an image"}
+                      </Label>
+                      <Input
+                        id="avatar-image-upload"
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setImageFile(file);
+                          setImageUploading(true);
+                          try {
+                            const formData = new FormData();
+                            formData.append("file", file);
+                            const { data } = await api.post("/api/upload/image", formData, {
+                              headers: { "Content-Type": "multipart/form-data" },
+                            });
+                            setImageUrl(data.url);
+                          } catch {
+                            setImageFile(null);
+                          } finally {
+                            setImageUploading(false);
+                          }
+                        }}
+                      />
+                      {imageUploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                      {imageUrl && !imageUploading && (
+                        <div className="relative h-10 w-10 overflow-hidden rounded-lg border">
+                          <img src={imageUrl} alt="preview" className="h-full w-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Custom Prompt */}
+                  <Separator className="bg-border/50" />
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                      Custom Prompt <span className="text-muted-foreground/50">(optional)</span>
+                    </label>
+                    <Textarea
+                      value={customPrompt}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setCustomPrompt(e.target.value)}
+                      placeholder="Describe the character's personality, background, voice, or any special traits..."
+                      className="min-h-[80px] resize-y text-sm"
                     />
+                    <p className="mt-1 text-xs text-muted-foreground/60">
+                      This prompt will be used when generating the avatar's character sheet. Max 1000 characters.
+                    </p>
                   </div>
 
                   {/* Submit */}

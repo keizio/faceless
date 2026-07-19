@@ -15,6 +15,13 @@
       "when": 1784304156737,
       "tag": "0001_shiny_spyke",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784440644696,
+      "tag": "0002_minor_demogoblin",
+      "breakpoints": true
     }
   ]
 }

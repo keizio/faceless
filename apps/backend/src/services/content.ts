@@ -4,6 +4,7 @@ import { eq, and, inArray, desc, sql, isNull } from "drizzle-orm";
 import { enqueueContentGeneration } from "../queues/content-generation.js";
 import { CREDIT_COSTS } from "@faceless/shared";
 import { UsageService } from "./usage.js";
+import { CreditTransactionService } from "./credit-transaction.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getR2Client, uploadFile, randomFilename } from "../lib/storage.js";
 import { getProviders } from "../lib/providers/factory.js";
@@ -60,6 +61,14 @@ export class ContentService {
       .returning();
 
     await usageService.deductCredits(userId, cost);
+
+    const creditTransactionService = new CreditTransactionService();
+    await creditTransactionService.logTransaction(userId, {
+      type: "deduction",
+      amount: -cost,
+      reason: "content_generation",
+      referenceId: content.id,
+    });
 
     await enqueueContentGeneration({
       jobId: job.id,

@@ -9,14 +9,14 @@ import {
   renderBrandKitGuidance,
 } from "../../lib/prompts/prompt-builder.js";
 import { getNegativePrompt } from "../../lib/prompts/negative-prompts.js";
-import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/avatar-injector.js";
+import { renderAvatarForText, renderNoAvatarGuidance, renderAvatarForVisual } from "../../lib/prompts/avatar-injector.js";
 import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { insertMediaAsset } from "../../lib/media.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType, BrandKit } from "@faceless/shared";
-import type { EnhancedPrompt } from "../../lib/prompts/types.js";
+import type { EnhancedPrompt, ArtStyle } from "../../lib/prompts/types.js";
 import {
   renderChatTemplate,
   renderSplitScreenTemplate,
@@ -37,6 +37,9 @@ import {
   renderToneByChannel,
 } from "../../lib/prompts/copywriting-frameworks.js";
 import type { CopywritingFramework, HeadlineFormula, CtaPattern } from "../../lib/prompts/types.js";
+import { buildStoryBibleUserMessage, parseStoryBibleResponse } from "../../lib/prompts/story-bible.js";
+import { buildContinuityCheckUserMessage, parseContinuityCheckResponse } from "../../lib/prompts/continuity-checker.js";
+import { assembleContinuityPrompt } from "../../lib/prompts/continuity-prompt-builder.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -78,6 +81,7 @@ const enhanceVideoPromptStep = createStep({
     language: z.string(),
     avatarId: z.string().optional(),
     avatarContext: z.string().optional(),
+    avatarVisual: z.string().optional(),
     brandKitGuidance: z.string().optional(),
     brandKitJson: z.string().optional(),
     isFaceless: z.boolean(),
@@ -121,6 +125,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
         cameraDirection?: EnhancedPrompt["cameraDirection"];
         qualityTags?: string[];
         scenePrompts?: string[];
+        artStyle?: ArtStyle;
       }>(result);
       enhanced = {
         visualPrompt: parsed.visualPrompt ?? inputData.prompt,
@@ -131,6 +136,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
         qualityTags: parsed.qualityTags ?? [],
         negativePrompt: "",
         scenePrompts: parsed.scenePrompts ?? [],
+        artStyle: parsed.artStyle,
       };
     } catch {
       enhanced = {
@@ -142,6 +148,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
         qualityTags: [],
         negativePrompt: "",
         scenePrompts: [],
+        artStyle: undefined,
       };
     }
 
@@ -155,6 +162,10 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
     const brandKitGuidance = renderBrandKitGuidance(context.brandKit);
     const brandKitJson = context.brandKit ? JSON.stringify(context.brandKit) : undefined;
 
+    const avatarVisual = context.avatar
+      ? renderAvatarForVisual(context.avatar)
+      : undefined;
+
     return {
       contentId: inputData.contentId,
       userId: inputData.userId,
@@ -165,6 +176,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
       language: inputData.language,
       avatarId: inputData.avatarId,
       avatarContext: isFaceless ? renderNoAvatarGuidance() : renderAvatarForText(context.avatar!),
+      avatarVisual,
       brandKitGuidance,
       brandKitJson,
       isFaceless,
@@ -193,6 +205,7 @@ const generateVideoScriptStep = createStep({
     platform: z.string(),
     language: z.string(),
     avatarId: z.string().optional(),
+    avatarVisual: z.string().optional(),
     avatarContext: z.string().optional(),
     brandKitGuidance: z.string().optional(),
     brandKitJson: z.string().optional(),
@@ -216,6 +229,7 @@ const generateVideoScriptStep = createStep({
     platform: z.string(),
     language: z.string(),
     avatarId: z.string().optional(),
+    avatarVisual: z.string().optional(),
     enhancedPrompt: z.any(),
     promptContext: z.any(),
     script: z.string(),
@@ -328,6 +342,7 @@ const generateVideoScriptStep = createStep({
       platform: inputData.platform,
       language: inputData.language,
       avatarId: inputData.avatarId,
+      avatarVisual: inputData.avatarVisual,
       enhancedPrompt: inputData.enhancedPrompt,
       promptContext: inputData.promptContext,
       script,
@@ -350,6 +365,7 @@ const videoScriptOutputSchema = z.object({
   platform: z.string(),
   language: z.string(),
   avatarId: z.string().optional(),
+  avatarVisual: z.string().optional(),
   enhancedPrompt: z.any(),
   promptContext: z.any(),
   script: z.string(),
@@ -497,30 +513,180 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
   },
 });
 
+const storyBibleExtendedSchema = videoScriptOutputSchema.extend({
+  storyBible: z.any(),
+});
+
+const buildStoryBibleStep = createStep({
+  id: "build-story-bible",
+  description: "Extract narrative story bible from generated script for scene continuity",
+  inputSchema: videoScriptOutputSchema,
+  outputSchema: storyBibleExtendedSchema,
+  execute: async ({ inputData }) => {
+    const agent = mastra.getAgent("scriptWriter");
+    const contextData = inputData.promptContext as {
+      platform: string;
+      hasAvatar: boolean;
+      avatarName?: string;
+      avatarReferenceImageUrl?: string;
+    } | undefined;
+
+    const isFaceless = !contextData?.hasAvatar;
+    const avatarContext = contextData?.avatarName
+      ? `Avatar: ${contextData.avatarName}`
+      : "";
+
+    const userMessage = buildStoryBibleUserMessage(
+      inputData.script,
+      inputData.prompt,
+      inputData.sceneCount,
+      inputData.platform,
+      avatarContext,
+      isFaceless,
+    );
+
+    const response = await agent.generate(userMessage);
+    const text = (response as { text: string }).text;
+
+    const storyBible = parseStoryBibleResponse(text, {
+      topic: inputData.prompt,
+      totalScenes: inputData.sceneCount,
+    });
+
+    await db
+      .update(contents)
+      .set({
+        metadata: {
+          storyBible,
+          hasAvatar: !!inputData.avatarId,
+          platform: inputData.platform,
+        },
+      })
+      .where(eq(contents.id, inputData.contentId));
+
+    return {
+      ...inputData,
+      storyBible,
+    };
+  },
+});
+
+const scenePromptsExtendedSchema = storyBibleExtendedSchema.extend({
+  scenePrompts: z.array(z.string()),
+});
+
+const enhanceScenePromptsStep = createStep({
+  id: "enhance-scene-prompts",
+  description: "Enhance each scene prompt with story bible context for narrative continuity",
+  inputSchema: storyBibleExtendedSchema,
+  outputSchema: scenePromptsExtendedSchema,
+  execute: async ({ inputData }) => {
+    const storyBible = inputData.storyBible;
+    const enhanced = inputData.enhancedPrompt as EnhancedPrompt & { scenePrompts: string[] };
+    const contextData = inputData.promptContext as {
+      platform: string;
+      hasAvatar: boolean;
+      avatarName?: string;
+    } | undefined;
+
+    const isFaceless = !contextData?.hasAvatar;
+    const platform = (inputData.platform || contextData?.platform || "generic") as Platform;
+    const avatarVisual = inputData.avatarVisual;
+
+    const scenePrompts: string[] = [];
+    const previousSceneSummaries: import("../../lib/prompts/story-bible.js").SceneSummary[] = [];
+
+    for (let i = 0; i < inputData.sceneCount; i++) {
+      const visualPrompt = enhanced.scenePrompts?.[i] ?? enhanced.visualPrompt;
+
+      const scenePrompt = assembleContinuityPrompt(
+        visualPrompt,
+        storyBible,
+        i,
+        inputData.sceneCount,
+        previousSceneSummaries,
+        enhanced.cameraDirection,
+        enhanced.qualityTags,
+        platform,
+        inputData.aspectRatio,
+        true,
+        isFaceless,
+        avatarVisual,
+        enhanced.artStyle,
+      );
+
+      scenePrompts.push(scenePrompt);
+
+      const sceneSummary = storyBible.sceneSummaries?.[i];
+      if (sceneSummary) {
+        previousSceneSummaries.push(sceneSummary);
+      }
+    }
+
+    return {
+      ...inputData,
+      scenePrompts,
+    };
+  },
+});
+
+const continuityCheckExtendedSchema = scenePromptsExtendedSchema.extend({
+  continuityCheckedPrompts: z.array(z.string()),
+});
+
+const continuityCheckStep = createStep({
+  id: "continuity-check",
+  description: "Review all scene prompts for narrative continuity, visual variety, and duplicate prevention",
+  inputSchema: scenePromptsExtendedSchema,
+  outputSchema: continuityCheckExtendedSchema,
+  execute: async ({ inputData }) => {
+    const agent = mastra.getAgent("continuityChecker");
+    const storyBible = inputData.storyBible;
+
+    if (inputData.sceneCount <= 1) {
+      return {
+        ...inputData,
+        continuityCheckedPrompts: inputData.scenePrompts,
+      };
+    }
+
+    const userMessage = buildContinuityCheckUserMessage(
+      inputData.scenePrompts,
+      storyBible,
+    );
+
+    let checkedPrompts = inputData.scenePrompts;
+
+    try {
+      const response = await agent.generate(userMessage);
+      const text = (response as { text: string }).text;
+      const result = parseContinuityCheckResponse(text, inputData.scenePrompts);
+
+      if (!result.passes && result.rewrittenPrompts) {
+        checkedPrompts = result.rewrittenPrompts;
+        console.log(
+          `[continuity-check] ${result.issues.length} issues found, prompts rewritten`,
+        );
+      } else if (!result.passes) {
+        console.warn(
+          `[continuity-check] ${result.issues.length} issues found but no rewrites provided, using originals`,
+        );
+      }
+    } catch (error) {
+      console.error("[continuity-check] Failed, using original prompts", error);
+    }
+
+    return {
+      ...inputData,
+      continuityCheckedPrompts: checkedPrompts,
+    };
+  },
+});
+
 const generateVideoImagesStep = createStep({
   id: "generate-video-images",
   description: "Generate key frame images for video scenes with enhanced prompts",
-  inputSchema: z.object({
-    contentId: z.string(),
-    userId: z.string(),
-    prompt: z.string(),
-    aspectRatio: z.string(),
-    sceneCount: z.number(),
-    platform: z.string(),
-    language: z.string(),
-    avatarId: z.string().optional(),
-    enhancedPrompt: z.any(),
-    promptContext: z.any(),
-    script: z.string(),
-    caption: z.string(),
-    narrationText: z.string(),
-    sceneNarrations: z.array(z.string()),
-    brandKitJson: z.string().optional(),
-    templateInputs: z.record(z.unknown()).optional(),
-    templateId: z.string().optional(),
-    reviewScore: z.number().optional(),
-    reviewFeedback: z.array(z.string()).optional(),
-  }),
+  inputSchema: continuityCheckExtendedSchema,
   outputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
@@ -554,34 +720,11 @@ const generateVideoImagesStep = createStep({
     };
     const scenes: { url: string; description: string; scenePrompt: string }[] = [];
 
-    let previousScenePrompt: string | undefined;
+    const continuityCheckedPrompts = inputData.continuityCheckedPrompts;
+    const scenePrompts = continuityCheckedPrompts ?? enhanced.scenePrompts;
 
     for (let i = 0; i < inputData.sceneCount; i++) {
-      const sceneEnhanced: EnhancedPrompt = {
-        visualPrompt: enhanced.scenePrompts?.[i] ?? enhanced.visualPrompt,
-        cameraDirection: enhanced.cameraDirection,
-        qualityTags: enhanced.qualityTags,
-        negativePrompt: enhanced.negativePrompt,
-      };
-
-      const contextForScene = {
-        userPrompt: inputData.prompt,
-        contentType: "video" as ContentType,
-        platform: contextData.platform as Platform,
-        aspectRatio: inputData.aspectRatio,
-        language: inputData.language,
-        sceneIndex: i,
-        totalScenes: inputData.sceneCount,
-      };
-
-      const scenePrompt = assembleScenePrompt(
-        sceneEnhanced,
-        contextForScene,
-        i,
-        inputData.sceneCount,
-        previousScenePrompt,
-        true,
-      );
+      const scenePrompt = scenePrompts[i] ?? enhanced.visualPrompt;
 
       const negativePrompt = getNegativePrompt(contextData.platform as Platform);
       const imageUrl = await getProviders().image.generate(scenePrompt, size, undefined, { negativePrompt, qualityTags: enhanced.qualityTags });
@@ -600,8 +743,6 @@ const generateVideoImagesStep = createStep({
           hasAvatar: contextData.hasAvatar,
         },
       });
-
-      previousScenePrompt = scenePrompt;
 
       scenes.push({
         url: imageUrl,
@@ -1142,6 +1283,9 @@ export const generateVideoWorkflow = createWorkflow({
   .then(enhanceVideoPromptStep)
   .then(generateVideoScriptStep)
   .then(reviewVideoScriptStep)
+  .then(buildStoryBibleStep)
+  .then(enhanceScenePromptsStep)
+  .then(continuityCheckStep)
   .then(generateVideoImagesStep)
   .then(compositeVideoSceneStep)
   .then(generateVoiceoverStep)

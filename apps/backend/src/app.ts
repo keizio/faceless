@@ -12,6 +12,7 @@ import { templateRoutes } from "./routes/templates";
 import { ideasRoutes } from "./routes/ideas";
 import { uploadRoutes } from "./routes/upload";
 import { statsRoutes } from "./routes/stats";
+import { creditRoutes } from "./routes/credits";
 import { rateLimiter } from "./middleware/rate-limiter";
 import { errorHandler } from "./middleware/error-handler";
 
@@ -44,6 +45,7 @@ app.route("/api/templates", templateRoutes);
 app.route("/api/ideas", ideasRoutes);
 app.route("/api/upload", uploadRoutes);
 app.route("/api/stats", statsRoutes);
+app.route("/api/credits", creditRoutes);
 
 app.onError(errorHandler);
 

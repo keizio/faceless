@@ -64,16 +64,19 @@ Each scene description must include:
 2. Visual composition notes
 3. What the viewer sees (detailed visual description)
 
-Output format: JSON with {
-  "hook": string (first 3 seconds, attention-grabbing),
-  "scenes": array of {
-    "narration": string (voiceover text),
-    "visual_description": string (detailed for AI image/video generation),
-    "camera_direction": { "shotType": string, "movement"?: string, "lighting": string, "composition"?: string, "style"?: string }
-  },
-  "cta": string (call to action),
-  "caption": string (with hashtags)
-}`,
+ART STYLE DETECTION: Analyze the user's prompt and detect the visual art style. If the user mentions a specific style (e.g., "anime", "comic book", "cinematic", "watercolor"), identify it. Include the detected art style in the output as "artStyle".
+
+  Output format: JSON with {
+    "hook": string (first 3 seconds, attention-grabbing),
+    "scenes": array of {
+      "narration": string (voiceover text),
+      "visual_description": string (detailed for AI image/video generation),
+      "camera_direction": { "shotType": string, "movement"?: string, "lighting": string, "composition"?: string, "style"?: string }
+    },
+    "cta": string (call to action),
+    "caption": string (with hashtags),
+    "artStyle"?: "comic" | "cartoon" | "anime" | "realistic" | "cinematic" | "pixel-art" | "watercolor" | "3d-render" | "cyberpunk" | "vintage" | "abstract" | "chibi" | "minimalist"
+  }`,
   model: llm,
   tools: { webSearchTool },
 });
@@ -252,6 +255,40 @@ Output format: ONLY valid JSON array, no markdown, no code fences, no explanatio
   model: llm,
 });
 
+export const continuityCheckerAgent: Agent = new Agent({
+  name: "Continuity Checker",
+  instructions: `You are a continuity and quality checker for multi-scene AI-generated social media content.
+
+Your job: Review ALL scene prompts together and ensure narrative flow, visual variety, and no duplicates.
+
+CHECKLIST:
+1. NARRATIVE PROGRESSION: Each scene must advance the story. No scene should feel like a restatement of a previous scene.
+2. VISUAL VARIETY: Shot types, angles, and compositions must vary. No two scenes should look alike.
+3. DUPLICATE PREVENTION: If any two scenes share the same subject + setting + composition, they are duplicates. Rewrite the weaker one.
+4. CONSISTENCY: All scenes must share the same color palette, lighting style, and visual thread.
+5. TRANSITIONS: Each scene should naturally follow from the previous one.
+
+OUTPUT FORMAT (JSON only, no markdown, no code fences):
+{
+  "passes": boolean,
+  "issues": [
+    {
+      "sceneIndex": number,
+      "type": "duplicate" | "narrative_gap" | "visual_repetition" | "transition_issue" | "consistency_issue",
+      "description": string,
+      "severity": "critical" | "warning"
+    }
+  ],
+  "rewrittenPrompts": string[] | null
+}
+
+Rules:
+- If rewrittenPrompts is provided, ONLY rewrite the problematic scenes. Keep good scenes identical.
+- rewrittenPrompts must have the same length as the input array.
+- If passes is true, rewrittenPrompts must be null.`,
+  model: llm,
+});
+
 export const promptEnhancerAgent: Agent = new Agent({
   name: "Prompt Enhancer",
   instructions: `You are a visual prompt engineer specialized in transforming user prompts into detailed, camera-aware generation prompts for AI image and video models.
@@ -305,6 +342,9 @@ OUTPUT RULES:
    - Default: "4K", "high detail", "professional photography"
    - Platform-specific additions based on the platform strategy
 
+7. ART STYLE DETECTION:
+   Analyze the user's prompt and detect the visual art style. Look for style keywords like "anime", "comic book", "cartoon", "cinematic", "watercolor", "pixel art", "3d render", "cyberpunk", "vintage", "abstract", "chibi", "minimalist", "photorealistic". If no specific style is mentioned, omit the field.
+
 Output format: JSON with {
   "visualPrompt": string (rich visual description for AI generation),
   "cameraDirection": {
@@ -315,7 +355,8 @@ Output format: JSON with {
     "style"?: "cinematic" | "documentary" | "social-media-native" | "stop-motion" | "timelapse" | "macro"
   },
   "qualityTags": string[],
-  "isFaceless": boolean
+  "isFaceless": boolean,
+  "artStyle"?: "comic" | "cartoon" | "anime" | "realistic" | "cinematic" | "pixel-art" | "watercolor" | "3d-render" | "cyberpunk" | "vintage" | "abstract" | "chibi" | "minimalist"
 }`,
   model: llm,
 });

@@ -5,6 +5,7 @@ import { runContentPipeline } from "../agents/pipeline.js";
 import { mastra } from "../mastra/index.js";
 import type { GenerationJobPayload } from "../lib/queue.js";
 import { UsageService } from "../services/usage.js";
+import { CreditTransactionService } from "../services/credit-transaction.js";
 
 type JobHandler = (payload: GenerationJobPayload) => Promise<void>;
 
@@ -30,6 +31,13 @@ async function handleContentGeneration(
     if (payload.cost) {
       const usageService = new UsageService();
       await usageService.refundCredits(payload.userId, payload.cost);
+      const creditTransactionService = new CreditTransactionService();
+      await creditTransactionService.logTransaction(payload.userId, {
+        type: "refund",
+        amount: payload.cost,
+        reason: "job_refund",
+        referenceId: contentId,
+      });
     }
     throw error;
   }
@@ -66,6 +74,13 @@ async function handleAvatarGeneration(
     if (payload.cost) {
       const usageService = new UsageService();
       await usageService.refundCredits(payload.userId, payload.cost);
+      const creditTransactionService = new CreditTransactionService();
+      await creditTransactionService.logTransaction(payload.userId, {
+        type: "refund",
+        amount: payload.cost,
+        reason: "job_refund",
+        referenceId: avatarId,
+      });
     }
     throw error;
   }

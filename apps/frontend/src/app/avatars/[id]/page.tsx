@@ -8,6 +8,7 @@ import { SPEECH_STYLE_LABELS, GENDER_OPTIONS, AGE_RANGES, getAgeRangeLabel, getA
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -53,6 +54,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
   const [speechStyle, setSpeechStyle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [portraitUrl, setPortraitUrl] = useState("");
+  const [customPrompt, setCustomPrompt] = useState("");
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -64,6 +66,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
     setSpeechStyle(avatar.speechStyle || "");
     setImageUrl(avatar.referenceImageUrl || "");
     setPortraitUrl(avatar.portraitUrl || "");
+    setCustomPrompt((avatar.metadata as Record<string, unknown> | null)?.customPrompt as string || "");
   }, [avatar]);
 
   useEffect(() => {
@@ -81,6 +84,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
         speechStyle: speechStyle || undefined,
         referenceImageUrl: imageUrl || undefined,
         portraitUrl: portraitUrl || undefined,
+        customPrompt: customPrompt.trim() || undefined,
       },
     );
   };
@@ -335,6 +339,20 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                               Set to override the AI-generated portrait
                             </p>
                           )}
+                        </div>
+                        <div>
+                          <label className="mb-0.5 block text-xs font-medium text-muted-foreground">
+                            Custom Prompt <span className="text-muted-foreground/50">(optional)</span>
+                          </label>
+                          <Textarea
+                            value={customPrompt}
+                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setCustomPrompt(e.target.value)}
+                            placeholder="Describe the character's personality, background, voice, or any special traits..."
+                            className="min-h-[70px] resize-y text-sm"
+                          />
+                          <p className="mt-0.5 text-[11px] text-muted-foreground/50">
+                            Used when generating the avatar's character sheet. Max 1000 characters.
+                          </p>
                         </div>
                         <div className="flex justify-end gap-2 pt-1">
                           <Button

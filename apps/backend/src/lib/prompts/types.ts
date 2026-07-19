@@ -1,5 +1,7 @@
 import type { Platform, ContentType, SpeechStyle, BrandKit } from "@faceless/shared";
+import type { ArtStyle } from "./art-style-detector.js";
 export type { Platform, ContentType };
+export type { ArtStyle };
 
 export type ContentGoal = "awareness" | "engagement" | "conversion" | "education" | "entertainment";
 export type CopywritingFramework = "aida" | "pas" | "fab" | "none";
@@ -76,6 +78,7 @@ export interface PromptContext {
   copywritingFramework?: CopywritingFramework;
   headlineFormula?: HeadlineFormula;
   ctaPattern?: CtaPattern;
+  artStyle?: ArtStyle;
 }
 
 export interface EnhancedPrompt {
@@ -83,6 +86,7 @@ export interface EnhancedPrompt {
   cameraDirection: CameraDirection;
   negativePrompt: string;
   qualityTags: string[];
+  artStyle?: ArtStyle;
 }
 
 export interface PlatformStrategy {

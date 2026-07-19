@@ -29,11 +29,13 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Wallet,
 } from "lucide-react";
 import { useState, useCallback, useEffect, useRef } from "react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/credits", label: "Credits", icon: Wallet },
   { href: "/ideas", label: "Ideas", icon: Lightbulb },
   { href: "/contents", label: "Contents", icon: FileText },
   { href: "/projects", label: "Projects", icon: Folder },
@@ -44,6 +46,7 @@ const NAV_ITEMS = [
 
 const ROUTE_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
+  credits: "Credits",
   ideas: "Ideas",
   projects: "Projects",
   templates: "Templates",

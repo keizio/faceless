@@ -119,6 +119,8 @@ const arePropsEqual = (
   if (prev.shapeFill !== next.shapeFill) return false;
   if (prev.shapeStroke !== next.shapeStroke) return false;
   if (prev.shapeStrokeWidth !== next.shapeStrokeWidth) return false;
+  if (prev.layers !== next.layers) return false;
+  if (prev.shapeLayers !== next.shapeLayers) return false;
   return true;
 };
 
@@ -1264,7 +1266,8 @@ export const FabricCanvas = memo(
         )}
       </div>
     );
-  }),
+  },
+  ),
   arePropsEqual,
 );
 

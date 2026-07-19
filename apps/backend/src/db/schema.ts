@@ -42,6 +42,13 @@ export const jobStatusEnum = pgEnum("job_status", [
   "failed",
 ]);
 
+export const creditTransactionTypeEnum = pgEnum("credit_transaction_type", [
+  "deduction",
+  "refund",
+  "bonus",
+  "adjustment",
+]);
+
 export const speechStyleEnum = pgEnum("speech_style", [
   "formal",
   "casual",
@@ -232,11 +239,33 @@ export const notifications = pgTable(
   (table) => [index("notifications_user_idx").on(table.userId, table.createdAt)],
 );
 
+export const creditTransactions = pgTable(
+  "credit_transactions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: creditTransactionTypeEnum("type").notNull(),
+    amount: integer("amount").notNull(),
+    balanceAfter: integer("balance_after").notNull(),
+    reason: text("reason").notNull(),
+    referenceId: text("reference_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("credits_user_idx").on(table.userId),
+    index("credits_user_created_idx").on(table.userId, table.createdAt),
+  ],
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   projects: many(projects),
   contents: many(contents),
   avatars: many(avatars),
   notifications: many(notifications),
+  creditTransactions: many(creditTransactions),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -295,6 +324,16 @@ export const mediaAssetsRelations = relations(mediaAssets, ({ one }) => ({
   }),
   user: one(users, { fields: [mediaAssets.userId], references: [users.id] }),
 }));
+
+export const creditTransactionsRelations = relations(
+  creditTransactions,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [creditTransactions.userId],
+      references: [users.id],
+    }),
+  }),
+);
 
 export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, {

@@ -98,6 +98,7 @@ export function buildPromptEnhancerSystemPrompt(params: PromptEnhancerParams): s
   sections.push(
     ``,
     `Output format: JSON with {`,
+    `  "artStyle"?: "comic" | "cartoon" | "anime" | "realistic" | "cinematic" | "pixel-art" | "watercolor" | "3d-render" | "cyberpunk" | "vintage" | "abstract" | "chibi" | "minimalist" (detect from user prompt),`,
     `  "visualPrompt": string (rich visual description 200-400 words),`,
     `  "cameraDirection": {`,
     `    "shotType": "close-up" | "medium-shot" | "wide-shot" | "establishing-shot" | "pov" | "over-the-shoulder" | "dutch-angle" | "aerial",`,

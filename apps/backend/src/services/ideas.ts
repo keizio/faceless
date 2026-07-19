@@ -3,6 +3,7 @@ import { ideas } from "../db/schema";
 import { eq, desc, count, sql } from "drizzle-orm";
 import { mastra } from "../mastra/index";
 import { UsageService } from "./usage";
+import { CreditTransactionService } from "./credit-transaction";
 import { CREDIT_COSTS } from "@faceless/shared";
 import type { Idea, IdeaItem } from "@faceless/shared";
 
@@ -141,6 +142,14 @@ export async function generateIdeas(
     .returning();
 
   await usageService.deductCredits(userId, cost);
+
+  const creditTransactionService = new CreditTransactionService();
+  await creditTransactionService.logTransaction(userId, {
+    type: "deduction",
+    amount: -cost,
+    reason: "idea_generation",
+    referenceId: row.id,
+  });
 
   return {
     id: row.id,

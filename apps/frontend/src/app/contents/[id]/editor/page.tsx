@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Save, Loader2, Undo2, Redo2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TextLayer, ShapeLayer } from "@faceless/shared";
 import { toast } from "sonner";
 import type { FabricCanvasHandle } from "@/components/editor/FabricCanvas";
@@ -98,8 +98,6 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const { data: content, isLoading } = useContent(id);
   const canvasRef = useRef<FabricCanvasHandle>(null);
 
-  const textLayers = useCanvasEditorStore((s) => s.textLayers);
-  const shapeLayers = useCanvasEditorStore((s) => s.shapeLayers);
   const activeSlideIndex = useCanvasEditorStore((s) => s.activeSlideIndex);
   const isDirty = useCanvasEditorStore((s) => s.isDirty);
   const isSaving = useCanvasEditorStore((s) => s.isSaving);
@@ -146,8 +144,14 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const { width, height } = getCanvasDimensions(content?.aspectRatio ?? null);
 
   const slideKey = `slide-${activeSlideIndex}`;
-  const currentLayers = textLayers[slideKey] || [];
-  const currentShapeLayers = shapeLayers[slideKey] || [];
+  const canvasLayers = useMemo(
+    () => (savedTextLayers?.textLayers[slideKey] ?? []) as TextLayer[],
+    [savedTextLayers, slideKey],
+  );
+  const canvasShapeLayers = useMemo(
+    () => (savedTextLayers?.shapeLayers[slideKey] ?? []) as ShapeLayer[],
+    [savedTextLayers, slideKey],
+  );
   const backgroundImage = slideImages[activeSlideIndex] || slideImages[0] || "";
 
   useEffect(() => {
@@ -200,11 +204,12 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
   const getLayerType = useCallback(
     (layerId: string): "text" | "shape" => {
-      const tLayers = textLayers[slideKey] || [];
+      const state = useCanvasEditorStore.getState();
+      const tLayers = (state.textLayers[slideKey] || []) as TextLayer[];
       if (tLayers.some((l) => l.id === layerId)) return "text";
       return "shape";
     },
-    [textLayers, slideKey],
+    [slideKey],
   );
 
   const handleUpdateLayer = useCallback(
@@ -348,8 +353,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           canvasRef.current?.sendToBack(layerId);
           break;
         case "toggleLock": {
-          const tLayers = textLayers[slideKey] || [];
-          const sLayers = shapeLayers[slideKey] || [];
+          const state = useCanvasEditorStore.getState();
+          const tLayers = (state.textLayers[slideKey] || []) as TextLayer[];
+          const sLayers = (state.shapeLayers[slideKey] || []) as ShapeLayer[];
           const tLayer = tLayers.find((l) => l.id === layerId);
           const sLayer = sLayers.find((l) => l.id === layerId);
           const currentLocked = tLayer?.locked ?? sLayer?.locked ?? false;
@@ -380,7 +386,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         }
       }
     },
-    [contextMenuState, slideKey, addTextLayer, addShapeLayer, textLayers, shapeLayers, clipboard, setClipboard, handleRemoveLayer, handleToggleLock],
+    [contextMenuState, slideKey, addTextLayer, addShapeLayer, clipboard, setClipboard, handleRemoveLayer, handleToggleLock],
   );
 
   const handleUndo = useCallback(() => {
@@ -597,9 +603,14 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
   const contextMenuLayerId = contextMenuState?.layerId;
   const contextMenuIsLocked = contextMenuLayerId
-    ? (textLayers[slideKey]?.find((l) => l.id === contextMenuLayerId)?.locked ??
-       shapeLayers[slideKey]?.find((l) => l.id === contextMenuLayerId)?.locked ??
-       false)
+    ? (() => {
+        const state = useCanvasEditorStore.getState();
+        return (
+          (state.textLayers[slideKey] as TextLayer[] | undefined)?.find((l) => l.id === contextMenuLayerId)?.locked ??
+          (state.shapeLayers[slideKey] as ShapeLayer[] | undefined)?.find((l) => l.id === contextMenuLayerId)?.locked ??
+          false
+        );
+      })()
     : false;
 
   return (
@@ -708,8 +719,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
                   backgroundImage={backgroundImage}
                   width={width}
                   height={height}
-                  layers={currentLayers}
-                  shapeLayers={currentShapeLayers}
+                  layers={canvasLayers}
+                  shapeLayers={canvasShapeLayers}
                   slideKey={slideKey}
                   activeTool={activeTool}
                   activeShapeType={activeShapeType}

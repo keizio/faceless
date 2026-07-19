@@ -4,6 +4,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { CREDIT_COSTS } from "@faceless/shared";
 import { enqueueAvatarGeneration } from "../queues/avatar-generation.js";
 import { UsageService } from "./usage.js";
+import { CreditTransactionService } from "./credit-transaction.js";
 
 export class AvatarService {
   async listAvatars(userId: string, limit = 50, offset = 0) {
@@ -137,6 +138,14 @@ export class AvatarService {
       .returning();
 
     await usageService.deductCredits(userId, cost);
+
+    const creditTransactionService = new CreditTransactionService();
+    await creditTransactionService.logTransaction(userId, {
+      type: "deduction",
+      amount: -cost,
+      reason: "avatar_creation",
+      referenceId: avatarId,
+    });
 
     await enqueueAvatarGeneration({
       jobId: job.id,

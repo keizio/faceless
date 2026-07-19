@@ -4,14 +4,15 @@ import { getProviders } from "../../lib/providers/factory.js";
 import { getImageSize } from "../../lib/providers/dashscope.js";
 import { buildPromptContext, assembleFinalPrompt, renderBrandKitGuidance } from "../../lib/prompts/prompt-builder.js";
 import { getNegativePrompt } from "../../lib/prompts/negative-prompts.js";
-import { renderAvatarForText, renderNoAvatarGuidance } from "../../lib/prompts/avatar-injector.js";
+import { renderAvatarForText, renderNoAvatarGuidance, renderAvatarForVisual } from "../../lib/prompts/avatar-injector.js";
+import { cameraDirectionForPlatform } from "../../lib/prompts/camera-dsl.js";
 import { PLATFORM_STRATEGIES } from "../../lib/prompts/platform-strategies.js";
 import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { insertMediaAsset } from "../../lib/media.js";
 import { eq } from "drizzle-orm";
 import type { Platform, ContentType, BrandKit } from "@faceless/shared";
-import type { EnhancedPrompt } from "../../lib/prompts/types.js";
+import type { EnhancedPrompt, ArtStyle } from "../../lib/prompts/types.js";
 import {
   renderChatTemplate,
   renderSplitScreenTemplate,
@@ -36,6 +37,9 @@ import {
   buildQualityReviewerSystemPrompt,
 } from "../../lib/prompts/system-prompts.js";
 import type { CopywritingFramework, HeadlineFormula, CtaPattern } from "../../lib/prompts/types.js";
+import { buildStoryBibleUserMessage, parseStoryBibleResponse } from "../../lib/prompts/story-bible.js";
+import { buildContinuityCheckUserMessage, parseContinuityCheckResponse } from "../../lib/prompts/continuity-checker.js";
+import { assembleContinuityPrompt, buildSlideStoryboardUserMessage, parseSlideStoryboardResponse } from "../../lib/prompts/continuity-prompt-builder.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -145,7 +149,10 @@ const scriptOutputSchema = z.object({
   script: z.string(),
   caption: z.string(),
   enhancedPrompt: z.string().optional(),
+  artStyle: z.string().optional(),
   brandKitJson: z.string().optional(),
+  avatarContext: z.string().optional(),
+  isFaceless: z.boolean().optional(),
   slideCount: z.number().optional(),
   aspectRatio: z.string(),
   templateId: z.string().optional(),
@@ -241,6 +248,7 @@ const generateScriptStep = createStep({
     let script = text;
     let caption = "";
     let enhancedPrompt = "";
+    let artStyle: ArtStyle | undefined;
 
     try {
       const parsed = parseJsonResponse<{
@@ -249,10 +257,12 @@ const generateScriptStep = createStep({
         cta?: string;
         caption?: string;
         visual_prompt?: string;
+        artStyle?: ArtStyle;
       }>(text);
       script = `${parsed.hook ?? ""}\n\n${parsed.body ?? ""}\n\n${parsed.cta ?? ""}`;
       caption = parsed.caption ?? "";
       enhancedPrompt = parsed.visual_prompt ?? "";
+      artStyle = parsed.artStyle;
     } catch {
       script = text;
     }
@@ -279,7 +289,10 @@ const generateScriptStep = createStep({
       script,
       caption,
       enhancedPrompt,
+      artStyle,
       brandKitJson: inputData.brandKitJson,
+      avatarContext: inputData.avatarContext,
+      isFaceless,
       slideCount: inputData.slideCount,
       aspectRatio: inputData.aspectRatio,
       templateId: inputData.templateId,
@@ -316,6 +329,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
     let bestScript = inputData.script;
     let bestCaption = inputData.caption;
     let bestEnhancedPrompt = inputData.enhancedPrompt;
+    let bestArtStyle = inputData.artStyle;
     let bestScore = 0;
     let bestFeedback: string[] = [];
 
@@ -363,10 +377,12 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
               cta?: string;
               caption?: string;
               visual_prompt?: string;
+              artStyle?: ArtStyle;
             }>(regenText);
             bestScript = `${parsed.hook ?? ""}\n\n${parsed.body ?? ""}\n\n${parsed.cta ?? ""}`;
             bestCaption = parsed.caption ?? bestCaption;
             bestEnhancedPrompt = parsed.visual_prompt ?? bestEnhancedPrompt;
+            bestArtStyle = parsed.artStyle ?? bestArtStyle;
           } catch {
             bestScript = regenText;
           }
@@ -399,33 +415,199 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
       script: bestScript,
       caption: bestCaption,
       enhancedPrompt: bestEnhancedPrompt,
+      artStyle: bestArtStyle,
       reviewScore: bestScore,
       reviewFeedback: bestFeedback,
     };
   },
 });
 
+const slideStoryboardSchema = scriptOutputSchema.extend({
+  slideStoryboard: z.array(z.object({
+    slideIndex: z.number(),
+    title: z.string(),
+    description: z.string(),
+    visualDirection: z.string(),
+  })),
+  storyBible: z.any(),
+  scenePrompts: z.array(z.string()),
+  continuityCheckedPrompts: z.array(z.string()),
+});
+
+const buildSlideStoryboardStep = createStep({
+  id: "build-slide-storyboard",
+  description: "Generate per-slide visual prompts from the script for slide carousel content",
+  inputSchema: scriptOutputSchema,
+  outputSchema: slideStoryboardSchema.pick({
+    contentId: true,
+    userId: true,
+    contentType: true,
+    platform: true,
+    prompt: true,
+    language: true,
+    script: true,
+    caption: true,
+    enhancedPrompt: true,
+    brandKitJson: true,
+    slideCount: true,
+    aspectRatio: true,
+    templateId: true,
+    templateInputs: true,
+    reviewScore: true,
+    reviewFeedback: true,
+    slideStoryboard: true,
+    storyBible: true,
+    scenePrompts: true,
+    continuityCheckedPrompts: true,
+  }),
+  execute: async ({ inputData }) => {
+    if (inputData.contentType !== "slide") {
+      return {
+        ...inputData,
+        slideStoryboard: [],
+        storyBible: null,
+        scenePrompts: [],
+        continuityCheckedPrompts: [],
+      };
+    }
+
+    const agent = mastra.getAgent("scriptWriter");
+
+    const slideCount =
+      inputData.templateId === "listicle"
+        ? (inputData.templateInputs?.itemCount as number) ?? inputData.slideCount ?? 5
+        : inputData.slideCount ?? 3;
+
+    const userMessage = buildSlideStoryboardUserMessage(
+      inputData.script,
+      slideCount,
+      inputData.platform,
+      inputData.prompt,
+    );
+
+    const response = await agent.generate(userMessage);
+    const text = (response as { text: string }).text;
+
+    const storyboard = parseSlideStoryboardResponse(
+      text,
+      slideCount,
+      inputData.enhancedPrompt || `${inputData.prompt} for a ${inputData.platform} carousel post`,
+    );
+
+    const isFaceless = inputData.isFaceless ?? true;
+    const avatarContext = inputData.avatarContext ?? "";
+
+    const storyBibleMessage = buildStoryBibleUserMessage(
+      inputData.script,
+      inputData.prompt,
+      slideCount,
+      inputData.platform,
+      avatarContext,
+      isFaceless,
+    );
+
+    const bibleResponse = await agent.generate(storyBibleMessage);
+    const bibleText = (bibleResponse as { text: string }).text;
+    const storyBible = parseStoryBibleResponse(bibleText, {
+      topic: inputData.prompt,
+      totalScenes: slideCount,
+    });
+
+    const platform = inputData.platform as Platform;
+    const cameraDir = cameraDirectionForPlatform(platform);
+    const qualityTags = PLATFORM_STRATEGIES[platform]?.qualityTagSuffixes ?? ["high quality", "professional"];
+    const avatarVisual = !isFaceless && avatarContext
+      ? avatarContext
+      : undefined;
+
+    const scenePrompts: string[] = [];
+    const previousSceneSummaries: import("../../lib/prompts/story-bible.js").SceneSummary[] = [];
+
+    for (let i = 0; i < storyboard.length; i++) {
+      const slide = storyboard[i];
+      const scenePrompt = assembleContinuityPrompt(
+        slide.visualDirection,
+        storyBible,
+        i,
+        storyboard.length,
+        previousSceneSummaries,
+        cameraDir as import("../../lib/prompts/types.js").CameraDirection,
+        qualityTags,
+        platform,
+        inputData.aspectRatio,
+        true,
+        isFaceless,
+        avatarVisual,
+        inputData.artStyle as ArtStyle | undefined,
+      );
+
+      scenePrompts.push(scenePrompt);
+
+      const sceneSummary = storyBible.sceneSummaries?.[i];
+      if (sceneSummary) {
+        previousSceneSummaries.push(sceneSummary);
+      }
+    }
+
+    if (storyBible.topic) {
+      await db
+        .update(contents)
+        .set({ metadata: { storyBible, hasAvatar: !isFaceless, platform: inputData.platform } })
+        .where(eq(contents.id, inputData.contentId));
+    }
+
+    return {
+      ...inputData,
+      slideStoryboard: storyboard,
+      storyBible,
+      scenePrompts,
+      continuityCheckedPrompts: scenePrompts,
+    };
+  },
+});
+
+const buildSlideContinuityCheckStep = createStep({
+  id: "build-slide-continuity-check",
+  description: "Review all slide scene prompts for narrative continuity, visual variety, and duplicate prevention",
+  inputSchema: slideStoryboardSchema,
+  outputSchema: slideStoryboardSchema,
+  execute: async ({ inputData }) => {
+    if (inputData.contentType !== "slide" || inputData.scenePrompts.length <= 1) {
+      return inputData;
+    }
+
+    const agent = mastra.getAgent("continuityChecker");
+
+    const userMessage = buildContinuityCheckUserMessage(
+      inputData.scenePrompts,
+      inputData.storyBible,
+    );
+
+    let checkedPrompts = inputData.scenePrompts;
+
+    try {
+      const response = await agent.generate(userMessage);
+      const text = (response as { text: string }).text;
+      const result = parseContinuityCheckResponse(text, inputData.scenePrompts);
+
+      if (!result.passes && result.rewrittenPrompts) {
+        checkedPrompts = result.rewrittenPrompts;
+      }
+    } catch (error) {
+      console.error("[build-slide-continuity-check] Failed, using original prompts", error);
+    }
+
+    return {
+      ...inputData,
+      continuityCheckedPrompts: checkedPrompts,
+    };
+  },
+});
+
 const generateSlideImagesStep = createStep({
   id: "generate-slide-images",
-  description: "Generate multiple images for slide carousel content",
-  inputSchema: z.object({
-    contentId: z.string(),
-    userId: z.string(),
-    contentType: z.enum(["image", "slide", "video", "text"]),
-    platform: z.string(),
-    prompt: z.string(),
-    language: z.string(),
-    script: z.string(),
-    caption: z.string(),
-    enhancedPrompt: z.string().optional(),
-    brandKitJson: z.string().optional(),
-    slideCount: z.number().optional(),
-    aspectRatio: z.string(),
-    templateId: z.string().optional(),
-    templateInputs: z.record(z.unknown()).optional(),
-    reviewScore: z.number().optional(),
-    reviewFeedback: z.array(z.string()).optional(),
-  }),
+  description: "Generate multiple images for slide carousel content with continuity-checked prompts",
+  inputSchema: slideStoryboardSchema,
   outputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
@@ -461,10 +643,14 @@ const generateSlideImagesStep = createStep({
     const size = getImageSize(inputData.aspectRatio);
     const imageUrls: string[] = [];
 
+    const prompts = inputData.continuityCheckedPrompts.length > 0
+      ? inputData.continuityCheckedPrompts
+      : Array.from({ length: slideCount }, () =>
+          inputData.enhancedPrompt || `${inputData.prompt} for a ${inputData.platform} carousel post`,
+        );
+
     for (let i = 0; i < slideCount; i++) {
-      const slidePrompt = inputData.enhancedPrompt
-        ? inputData.enhancedPrompt
-        : `${inputData.prompt} for a ${inputData.platform} carousel post`;
+      const slidePrompt = prompts[i] ?? prompts[0];
 
       const negativePrompt = getNegativePrompt(inputData.platform as Platform);
       const imageUrl = await getProviders().image.generate(slidePrompt, size, undefined, { negativePrompt });
@@ -743,6 +929,8 @@ export const generateContentWorkflow = createWorkflow({
   .then(buildPromptContextStep)
   .then(generateScriptStep)
   .then(reviewScriptStep)
+  .then(buildSlideStoryboardStep)
+  .then(buildSlideContinuityCheckStep)
   .then(generateSlideImagesStep)
   .then(compositeSlideStep)
   .then(saveSlideVersionStep);

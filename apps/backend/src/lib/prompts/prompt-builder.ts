@@ -4,6 +4,7 @@ import type {
   Platform,
   ContentType,
 } from "./types.js";
+import { detectArtStyle, getArtStyleModifier } from "./art-style-detector.js";
 import type { BrandKit } from "@faceless/shared";
 import { buildAvatarContext, renderAvatarForVisual, renderNoAvatarGuidance } from "./avatar-injector.js";
 import { getNegativePrompt } from "./negative-prompts.js";
@@ -53,6 +54,8 @@ export async function buildPromptContext(
       context.brandKit = project.brandKit;
     }
   }
+
+  context.artStyle = detectArtStyle(userPrompt) ?? undefined;
 
   return context;
 }
@@ -109,11 +112,24 @@ export function assembleFinalPrompt(
   if (isStillImage) {
     delete camera.movement;
   }
-  const cameraText = renderCameraDirection(camera);
+const cameraText = renderCameraDirection(camera);
   sections.push(`Camera: ${cameraText}`);
 
   if (enhanced.qualityTags.length > 0) {
     sections.push(`Quality: ${enhanced.qualityTags.join(", ")}`);
+  }
+
+  const artStyle = context.artStyle ?? enhanced.artStyle;
+  const styleModifier = getArtStyleModifier(artStyle);
+  if (styleModifier) {
+    sections.push(`Art style: ${styleModifier}`);
+  }
+
+  if (context.avatar) {
+    const avatarVisual = renderAvatarForVisual(context.avatar);
+    sections.push(`Character: ${avatarVisual}`);
+  } else {
+    sections.push(renderNoAvatarGuidance());
   }
 
   const platformStrategy = PLATFORM_STRATEGIES[context.platform];
@@ -158,6 +174,12 @@ export function assembleScenePrompt(
 
   if (enhanced.qualityTags.length > 0) {
     sections.push(`Quality: ${enhanced.qualityTags.join(", ")}`);
+  }
+
+  const artStyle = context.artStyle ?? enhanced.artStyle;
+  const styleModifier = getArtStyleModifier(artStyle);
+  if (styleModifier) {
+    sections.push(`Art style: ${styleModifier}`);
   }
 
   const platformStrategy = PLATFORM_STRATEGIES[context.platform];
