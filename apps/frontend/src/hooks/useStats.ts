@@ -8,6 +8,7 @@ export interface Stats {
   successRate: number;
   totalJobs: number;
   failedJobs: number;
+  totalContents: number;
 }
 
 export function useStats() {

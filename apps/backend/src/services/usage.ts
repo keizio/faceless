@@ -1,5 +1,5 @@
 import { db } from "../db/index";
-import { generationJobs, users } from "../db/schema";
+import { contents, generationJobs, users } from "../db/schema";
 import { eq, and, count, sql } from "drizzle-orm";
 
 export class UsageService {
@@ -71,6 +71,13 @@ export class UsageService {
     const failedJobs = failedResult?.count ?? 0;
     const successRate = totalJobs > 0 ? Math.round(((totalJobs - failedJobs) / totalJobs) * 100) : 100;
 
-    return { credits, successRate, totalJobs, failedJobs };
+    const [contentResult] = await db
+      .select({ count: count() })
+      .from(contents)
+      .where(eq(contents.userId, userId));
+
+    const totalContents = contentResult?.count ?? 0;
+
+    return { credits, successRate, totalJobs, failedJobs, totalContents };
   }
 }

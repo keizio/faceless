@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState } from "react";
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState, memo } from "react";
 import type { TextLayer, ShapeLayer, ShapeType } from "@faceless/shared";
 import { useCanvasEditorStore } from "@/stores/canvas-editor";
 import type { ToolMode } from "@/stores/canvas-editor";
@@ -21,6 +21,8 @@ interface FabricObjWithData {
   angle?: number;
   width?: number;
   height?: number;
+  scaleX?: number;
+  scaleY?: number;
   opacity?: number;
   visible?: boolean;
   type?: string;
@@ -33,6 +35,8 @@ interface FabricObjWithData {
   stroke?: string;
   strokeWidth?: number;
   textAlign?: string;
+  originX?: string;
+  originY?: string;
   selectable?: boolean;
   evented?: boolean;
   underline?: boolean;
@@ -102,7 +106,24 @@ function asObj(obj: unknown): FabricObjWithData {
   return obj as FabricObjWithData;
 }
 
-export const FabricCanvas = forwardRef<FabricCanvasHandle, FabricCanvasProps>(
+const arePropsEqual = (
+  prev: FabricCanvasProps,
+  next: FabricCanvasProps,
+): boolean => {
+  if (prev.slideKey !== next.slideKey) return false;
+  if (prev.backgroundImage !== next.backgroundImage) return false;
+  if (prev.width !== next.width || prev.height !== next.height) return false;
+  if (prev.activeTool !== next.activeTool) return false;
+  if (prev.activeShapeType !== next.activeShapeType) return false;
+  if (prev.brushSize !== next.brushSize) return false;
+  if (prev.shapeFill !== next.shapeFill) return false;
+  if (prev.shapeStroke !== next.shapeStroke) return false;
+  if (prev.shapeStrokeWidth !== next.shapeStrokeWidth) return false;
+  return true;
+};
+
+export const FabricCanvas = memo(
+  forwardRef<FabricCanvasHandle, FabricCanvasProps>(
   (
     {
       backgroundImage,
@@ -198,9 +219,11 @@ export const FabricCanvas = forwardRef<FabricCanvasHandle, FabricCanvasProps>(
             x: o.left ?? 0,
             y: o.top ?? 0,
             angle: o.angle ?? 0,
-            width: o.width ?? 200,
+            width: (o.width ?? 200) * (o.scaleX ?? 1),
             opacity: o.opacity ?? 1,
             visible: o.visible ?? true,
+            originX: (o.originX ?? "center") as "center" | "left" | "right",
+            originY: (o.originY ?? "center") as "center" | "top" | "bottom",
           });
         }
         if (data?.isShapeLayer && data?.layerData) {
@@ -208,8 +231,8 @@ export const FabricCanvas = forwardRef<FabricCanvasHandle, FabricCanvasProps>(
             ...(data.layerData as ShapeLayer),
             x: o.left ?? 0,
             y: o.top ?? 0,
-            width: o.width ?? 200,
-            height: o.height ?? 200,
+            width: (o.width ?? 200) * (o.scaleX ?? 1),
+            height: (o.height ?? 200) * (o.scaleY ?? 1),
             angle: o.angle ?? 0,
             opacity: o.opacity ?? 1,
             visible: o.visible ?? true,
@@ -246,14 +269,6 @@ export const FabricCanvas = forwardRef<FabricCanvasHandle, FabricCanvasProps>(
         syncLayersToStore();
         syncTimerRef.current = null;
       }, 300);
-    }, [syncLayersToStore]);
-
-    const flushSync = useCallback(() => {
-      if (syncTimerRef.current) {
-        clearTimeout(syncTimerRef.current);
-        syncTimerRef.current = null;
-      }
-      syncLayersToStore();
     }, [syncLayersToStore]);
 
     const saveUndoState = useCallback(() => {
@@ -699,10 +714,6 @@ export const FabricCanvas = forwardRef<FabricCanvasHandle, FabricCanvasProps>(
             layerType: data.isTextLayer ? "text" : "shape",
           });
         }) as never);
-
-        canvas.on("mouse:up", () => {
-          flushSync();
-        });
 
         const bgUrl = propsRef.current.backgroundImage;
         if (bgUrl) {
@@ -1253,7 +1264,8 @@ export const FabricCanvas = forwardRef<FabricCanvasHandle, FabricCanvasProps>(
         )}
       </div>
     );
-  },
+  }),
+  arePropsEqual,
 );
 
 FabricCanvas.displayName = "FabricCanvas";

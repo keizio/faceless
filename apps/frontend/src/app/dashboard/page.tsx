@@ -55,10 +55,7 @@ const { data: projectsData, isLoading } = useProjects();
     );
   };
 
-  const totalContents = projects?.reduce(
-    (sum: number, p: { contentsCount?: number }) => sum + (p.contentsCount ?? 0),
-    0,
-  ) ?? 0;
+  const totalContents = stats?.totalContents ?? 0;
 
   const scrollTemplates = (direction: "left" | "right") => {
     if (!templateScrollRef.current) return;
