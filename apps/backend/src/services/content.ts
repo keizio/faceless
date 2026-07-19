@@ -5,7 +5,8 @@ import { enqueueContentGeneration } from "../queues/content-generation.js";
 import { CREDIT_COSTS } from "@faceless/shared";
 import { UsageService } from "./usage.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { getR2Client } from "../lib/storage.js";
+import { getR2Client, uploadFile, randomFilename } from "../lib/storage.js";
+import { getProviders } from "../lib/providers/factory.js";
 
 export class ContentService {
   async createContent(
@@ -265,7 +266,7 @@ export class ContentService {
     return version?.outputUrl ?? null;
   }
 
-  async saveTextLayers(userId: string, contentId: string, versionId: string, textLayers: Record<string, unknown[]>) {
+  async saveTextLayers(userId: string, contentId: string, versionId: string, textLayers: Record<string, unknown[]>, shapeLayers?: Record<string, unknown[]>) {
     const [content] = await db
       .select({ id: contents.id })
       .from(contents)
@@ -290,14 +291,17 @@ export class ContentService {
     if (!version) throw new Error("Version not found");
 
     const existingMetadata = (version.metadata as Record<string, unknown>) || {};
-    const updatedMetadata = { ...existingMetadata, textLayers };
+    const updatedMetadata: Record<string, unknown> = { ...existingMetadata, textLayers };
+    if (shapeLayers) {
+      updatedMetadata.shapeLayers = shapeLayers;
+    }
 
     await db
       .update(contentVersions)
       .set({ metadata: updatedMetadata })
       .where(eq(contentVersions.id, versionId));
 
-    return { textLayers };
+    return { textLayers, shapeLayers };
   }
 
   async getTextLayers(userId: string, contentId: string, versionId: string) {
@@ -317,7 +321,7 @@ export class ContentService {
     if (!version) throw new Error("Version not found");
 
     const metadata = (version.metadata as Record<string, unknown>) || {};
-    return { textLayers: metadata.textLayers ?? {} };
+    return { textLayers: metadata.textLayers ?? {}, shapeLayers: metadata.shapeLayers ?? {} };
   }
 
   async createEditorVersion(
@@ -325,6 +329,7 @@ export class ContentService {
     contentId: string,
     imageUrls: string[],
     textLayers: Record<string, unknown[]>,
+    shapeLayers?: Record<string, unknown[]>,
   ) {
     const [content] = await db
       .select()
@@ -343,6 +348,11 @@ export class ContentService {
 
     const nextVersionNumber = (maxVersion?.versionNumber ?? 0) + 1;
 
+    const metadata: Record<string, unknown> = { textLayers };
+    if (shapeLayers) {
+      metadata.shapeLayers = shapeLayers;
+    }
+
     const [newVersion] = await db
       .insert(contentVersions)
       .values({
@@ -350,7 +360,7 @@ export class ContentService {
         versionNumber: nextVersionNumber,
         outputUrl: imageUrls[0],
         thumbnailUrl: imageUrls[0],
-        metadata: { textLayers },
+        metadata,
       })
       .returning();
 
@@ -365,6 +375,26 @@ export class ContentService {
     }
 
     return { version: newVersion };
+  }
+
+  async inpaintImage(userId: string, contentId: string, imageUrl: string, maskDataUrl: string) {
+    const [content] = await db
+      .select({ id: contents.id })
+      .from(contents)
+      .where(and(eq(contents.id, contentId), eq(contents.userId, userId)))
+      .limit(1);
+    if (!content) throw new Error("Content not found");
+
+    const maskMatch = maskDataUrl.match(/^data:image\/png;base64,(.+)$/);
+    if (!maskMatch) throw new Error("Invalid mask data URL format");
+    const maskBuffer = Buffer.from(maskMatch[1], "base64");
+    const maskUrl = await uploadFile(maskBuffer, randomFilename("png"), "image/png");
+
+    const provider = getProviders().image;
+    if (!provider.inpaint) throw new Error("Inpainting not supported by current provider");
+
+    const resultUrl = await provider.inpaint(imageUrl, maskUrl);
+    return { url: resultUrl };
   }
 
   async duplicateContent(

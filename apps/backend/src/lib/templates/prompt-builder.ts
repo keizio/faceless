@@ -1,9 +1,13 @@
+import type { CopywritingFramework, CtaPattern } from "../prompts/types.js";
+
 export interface TemplatePrompts {
   systemPrompt: string;
   visualGuidance: string;
   negativeAdditions: string[];
   scriptStructure?: string;
   narrationGuidance?: string;
+  framework?: CopywritingFramework;
+  ctaPattern?: CtaPattern;
 }
 
 export function buildTemplatePrompt(
@@ -82,6 +86,8 @@ CRITICAL RULES:
       "infographic",
     ],
     scriptStructure: "Hook (personal story/question) → Problem → Product reveal → Key benefit → Personal result → CTA",
+    framework: "aida",
+    ctaPattern: "benefit-driven",
   };
 }
 
@@ -137,6 +143,8 @@ CRITICAL RULES:
     ],
     scriptStructure: "Hook → Setup → Conflict → Climax → Resolution → CTA",
     narrationGuidance: `Write the narration as if speaking directly to a friend. Use pauses, emphasis, and natural speech patterns. The voiceover should carry the emotional weight of the story.`,
+    framework: "pas",
+    ctaPattern: "curiosity",
   };
 }
 
@@ -176,6 +184,8 @@ RULES:
       "low resolution",
       "distorted UI",
     ],
+    framework: "pas",
+    ctaPattern: "personal",
   };
 }
 
@@ -214,6 +224,8 @@ RULES:
       "cluttered",
       "busy background",
     ],
+    framework: "aida",
+    ctaPattern: "curiosity",
   };
 }
 
@@ -252,6 +264,8 @@ RULES:
       "quotes",
       "speech bubbles",
     ],
+    framework: "aida",
+    ctaPattern: "low-friction",
   };
 }
 
@@ -290,6 +304,8 @@ RULES:
       "divider",
       "watermark",
     ],
+    framework: "pas",
+    ctaPattern: "benefit-driven",
   };
 }
 
@@ -326,6 +342,8 @@ RULES:
       "digits",
       "cluttered",
     ],
+    framework: "aida",
+    ctaPattern: "curiosity",
   };
 }
 
@@ -374,6 +392,8 @@ CRITICAL RULES:
       "watermark",
     ],
     narrationGuidance: "No narration needed for POV content. The visual and POV text overlay tell the story.",
+    framework: "pas",
+    ctaPattern: "personal",
   };
 }
 

@@ -21,6 +21,20 @@ import {
 } from "../../lib/compositing/renderer.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
 import { applyWatermarkToBuffer } from "../../lib/compositing/watermark.js";
+import { mastra } from "../../mastra/index.js";
+import { parseJsonResponse } from "../../lib/prompts/parse-json.js";
+import {
+  renderAidaFramework,
+  renderHeadlineFormula,
+  renderCtaPattern,
+  renderToneByChannel,
+} from "../../lib/prompts/copywriting-frameworks.js";
+import {
+  buildPromptEnhancerSystemPrompt,
+  buildCaptionGeneratorSystemPrompt,
+  buildQualityReviewerSystemPrompt,
+} from "../../lib/prompts/system-prompts.js";
+import type { CopywritingFramework, HeadlineFormula, CtaPattern } from "../../lib/prompts/types.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -80,40 +94,24 @@ const enhanceImagePromptStep = createStep({
       inputData.aspectRatio,
     );
 
-    const textProvider = getProviders().text;
-
     const isFaceless = !context.avatar;
 
-    const baseSystemPrompt = `You are a visual prompt engineer. Transform a user's content idea into a detailed image generation prompt.
+    const agent = mastra.getAgent("promptEnhancer");
 
-Platform: ${inputData.platform}
-${isFaceless ? "FACELESS MODE: Generate content with NO human figures, NO faces. Focus on environment, objects, typography, and abstract visuals." : `AVATAR MODE: Include the character in the visual description. Avatar: ${context.avatar!.name}, ${context.avatar!.age ?? ""} years old, ${context.avatar!.gender ?? ""}, speech style: ${context.avatar!.speechStyle ?? "neutral"}.`}
+    const userMessage = `Create a visual image generation prompt for ${inputData.platform}, aspect ratio ${inputData.aspectRatio}, about: ${inputData.prompt}
 
-Output format: JSON with {
-  "visualPrompt": string (rich visual description 200-400 words),
-  "cameraDirection": {
-    "shotType": "close-up" | "medium-shot" | "wide-shot" | "establishing-shot" | "pov" | "over-the-shoulder" | "dutch-angle" | "aerial",
-    "movement"?: "static" | "pan" | "tilt" | "zoom" | "tracking" | "dolly" | "handheld" | "drone",
-    "lighting": "natural" | "golden-hour" | "studio" | "neon" | "low-key" | "high-key" | "backlit" | "rim-light" | "cinematic" | "soft-diffused",
-    "composition"?: "rule-of-thirds" | "center-frame" | "leading-lines" | "symmetry" | "negative-space" | "depth-of-field-shallow",
-    "style"?: "cinematic" | "documentary" | "social-media-native" | "stop-motion" | "timelapse" | "macro"
-  },
-  "qualityTags": string[]
-}`;
+Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
 
-    const systemPrompt = inputData.templateSystemPrompt
-      ? `${inputData.templateSystemPrompt}\n\n${inputData.templateVisualGuidance ? `Visual guidance: ${inputData.templateVisualGuidance}` : ""}\n\nPlatform: ${inputData.platform}\n${isFaceless ? "FACELESS MODE: NO human figures, NO faces." : `AVATAR MODE: Character: ${context.avatar!.name}.`}\n\nOutput format: JSON with {\n  "visualPrompt": string (rich visual description 200-400 words),\n  "cameraDirection": { "shotType": string, "movement"?: string, "lighting": string, "composition"?: string, "style"?: string },\n  "qualityTags": string[]\n}`
-      : baseSystemPrompt;
-
-    const result = await textProvider.generate({
-      system: systemPrompt,
-      prompt: `Create a visual image generation prompt for ${inputData.platform}, aspect ratio ${inputData.aspectRatio}, about: ${inputData.prompt}`,
-      temperature: 0.7,
-    });
+    const response = await agent.generate(userMessage);
+    const result = (response as { text: string }).text;
 
     let enhanced: EnhancedPrompt;
     try {
-      const parsed = JSON.parse(result);
+      const parsed = parseJsonResponse<{
+        visualPrompt?: string;
+        cameraDirection?: EnhancedPrompt["cameraDirection"];
+        qualityTags?: string[];
+      }>(result);
       enhanced = {
         visualPrompt: parsed.visualPrompt ?? inputData.prompt,
         cameraDirection: parsed.cameraDirection ?? {
@@ -206,44 +204,48 @@ const generateImageScriptStep = createStep({
     templateInputs: z.record(z.unknown()).optional(),
   }),
   execute: async ({ inputData }) => {
-    const textProvider = getProviders().text;
     const strategy = PLATFORM_STRATEGIES[inputData.platform as Platform] ?? PLATFORM_STRATEGIES.generic;
 
     const isFaceless = inputData.isFaceless;
     const avatarContext = inputData.avatarContext ?? "";
 
-    const brandSection = inputData.brandKitGuidance ? `\n\nBrand identity:\n${inputData.brandKitGuidance}\n\nIncorporate the brand identity naturally into the content.` : "";
+    const agent = mastra.getAgent("scriptWriter");
 
-    const baseSystemPrompt = `You are a professional social media caption writer for faceless content.
-Generate an engaging caption for a ${inputData.platform} image post.
+    const platform = inputData.platform as Platform;
+    const toneSection = renderToneByChannel(platform);
+    const headline: HeadlineFormula = "curiosity-gap";
+    const cta: CtaPattern = "low-friction";
 
-Platform: ${inputData.platform}
-${strategy.visualStyleGuidance}
+    const sections: string[] = [
+      `Write a social media caption for this ${inputData.platform} image post about: ${inputData.prompt}`,
+      `Language: ${inputData.language}`,
+      toneSection,
+      renderHeadlineFormula(headline),
+      renderCtaPattern(cta),
+    ];
 
-${isFaceless ? "FACELESS MODE: No human figures or faces. Focus on the visual theme." : `AVATAR MODE: Write in this character's voice:\n${avatarContext}`}
+    if (inputData.brandKitGuidance) {
+      sections.push(``, `Brand identity:`, inputData.brandKitGuidance);
+    }
 
-Language: ${inputData.language}
-${brandSection}
-Output format: JSON with "hook", "body", "cta", "caption" (with hashtags).
+    sections.push(``, `Return ONLY valid JSON — no markdown, no code fences, no explanation.`);
 
-CRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include slide numbers or scene numbering in the visual description.`;
+    const userMessage = sections.join("\n");
 
-    const systemPrompt = inputData.templateSystemPrompt
-      ? `${inputData.templateSystemPrompt}\n\nLanguage: ${inputData.language}\n\nOutput format: JSON with "hook", "body", "cta", "caption" (with hashtags).\n\nCRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script.`
-      : baseSystemPrompt;
-
-    const scriptResult = await textProvider.generate({
-      system: systemPrompt,
-      prompt: `Write a social media caption for this image post about: ${inputData.prompt}`,
-      temperature: 0.8,
-    });
+    const response = await agent.generate(userMessage);
+    const scriptResult = (response as { text: string }).text;
 
     let script = scriptResult;
     let caption = "";
 
     try {
-      const parsed = JSON.parse(scriptResult);
-      script = `${parsed.hook}\n\n${parsed.body}\n\n${parsed.cta}`;
+      const parsed = parseJsonResponse<{
+        hook?: string;
+        body?: string;
+        cta?: string;
+        caption?: string;
+      }>(scriptResult);
+      script = `${parsed.hook ?? ""}\n\n${parsed.body ?? ""}\n\n${parsed.cta ?? ""}`;
       caption = parsed.caption ?? "";
     } catch {
       script = scriptResult;
@@ -266,12 +268,138 @@ CRITICAL: Never include fake social media statistics, follower counts, like coun
       userId: inputData.userId,
       enhancedPrompt: inputData.enhancedPrompt,
       aspectRatio: inputData.aspectRatio,
+      language: inputData.language,
       promptMetadata: inputData.promptMetadata,
       script,
       caption,
       brandKitJson: inputData.brandKitJson,
       templateId: inputData.templateId,
       templateInputs: inputData.templateInputs,
+    };
+  },
+});
+
+const imageScriptOutputSchema = z.object({
+  contentId: z.string(),
+  userId: z.string(),
+  enhancedPrompt: z.string(),
+  aspectRatio: z.string(),
+  language: z.string(),
+  promptMetadata: z.any(),
+  script: z.string(),
+  caption: z.string(),
+  brandKitJson: z.string().optional(),
+  templateId: z.string().optional(),
+  templateInputs: z.record(z.unknown()).optional(),
+  reviewScore: z.number().optional(),
+  reviewFeedback: z.array(z.string()).optional(),
+});
+
+const MAX_REVIEW_RETRIES = 2;
+const MIN_ACCEPTABLE_SCORE = 6;
+
+const reviewImageScriptStep = createStep({
+  id: "review-image-script",
+  description: "Review image script quality and regenerate if score is below threshold",
+  inputSchema: imageScriptOutputSchema,
+  outputSchema: imageScriptOutputSchema,
+  execute: async ({ inputData }) => {
+    const reviewerAgent = mastra.getAgent("qualityReviewer");
+    const writerAgent = mastra.getAgent("scriptWriter");
+
+    const reviewMessage = `Review this social media image content:
+
+Platform: ${inputData.promptMetadata?.context?.platform ?? "generic"}
+
+Script:
+${inputData.script}
+
+Caption:
+${inputData.caption}
+
+Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
+
+    let bestScript = inputData.script;
+    let bestCaption = inputData.caption;
+    let bestScore = 0;
+    let bestFeedback: string[] = [];
+
+    for (let attempt = 0; attempt <= MAX_REVIEW_RETRIES; attempt++) {
+      try {
+        const reviewResponse = await reviewerAgent.generate(reviewMessage);
+        const reviewText = (reviewResponse as { text: string }).text;
+        const review = parseJsonResponse<{
+          approved?: boolean;
+          score?: number;
+          improvements?: string[];
+        }>(reviewText);
+
+        const score = review.score ?? 0;
+        const feedback = review.improvements ?? [];
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestFeedback = feedback;
+        }
+
+        if (score >= MIN_ACCEPTABLE_SCORE) {
+          break;
+        }
+
+        if (attempt < MAX_REVIEW_RETRIES) {
+          const regenSections: string[] = [
+            `Rewrite a social media caption for a ${inputData.promptMetadata?.context?.platform ?? "generic"} image post about: ${inputData.promptMetadata?.context?.avatarName ?? "the topic"}`,
+            `Language: ${inputData.language}`,
+            `Improve on these points:`,
+            ...feedback.map((f) => `- ${f}`),
+            ``,
+            `Return ONLY valid JSON with "hook", "body", "cta", "caption" — no markdown, no code fences, no explanation.`,
+          ];
+
+          const regenResponse = await writerAgent.generate(regenSections.join("\n"));
+          const regenText = (regenResponse as { text: string }).text;
+
+          try {
+            const parsed = parseJsonResponse<{
+              hook?: string;
+              body?: string;
+              cta?: string;
+              caption?: string;
+            }>(regenText);
+            bestScript = `${parsed.hook ?? ""}\n\n${parsed.body ?? ""}\n\n${parsed.cta ?? ""}`;
+            bestCaption = parsed.caption ?? bestCaption;
+          } catch {
+            bestScript = regenText;
+          }
+        }
+      } catch (error) {
+        console.error(`[review-image-script] Review attempt ${attempt + 1} failed:`, error);
+        break;
+      }
+    }
+
+    if (bestScript !== inputData.script || bestCaption !== inputData.caption) {
+      await db
+        .update(contents)
+        .set({
+          script: bestScript,
+          metadata: {
+            enhancedPrompt: inputData.enhancedPrompt,
+            hasAvatar: !!inputData.promptMetadata?.context?.hasAvatar,
+            platform: inputData.promptMetadata?.context?.platform,
+            reviewScore: bestScore,
+            reviewFeedback: bestFeedback,
+          },
+        })
+        .where(eq(contents.id, inputData.contentId));
+    }
+
+    return {
+      ...inputData,
+      script: bestScript,
+      caption: bestCaption,
+      reviewScore: bestScore,
+      reviewFeedback: bestFeedback,
     };
   },
 });
@@ -284,12 +412,15 @@ const generateImageStep = createStep({
     userId: z.string(),
     enhancedPrompt: z.string(),
     aspectRatio: z.string(),
+    language: z.string(),
     promptMetadata: z.any(),
     script: z.string(),
     caption: z.string(),
     brandKitJson: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
+    reviewScore: z.number().optional(),
+    reviewFeedback: z.array(z.string()).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -602,6 +733,7 @@ export const generateImageWorkflow = createWorkflow({
 })
   .then(enhanceImagePromptStep)
   .then(generateImageScriptStep)
+  .then(reviewImageScriptStep)
   .then(generateImageStep)
   .then(compositeImageStep)
   .then(saveImageVersionStep);

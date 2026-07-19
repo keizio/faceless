@@ -15,6 +15,7 @@ export interface GenerateVideoOptions {
   avatarReferenceImage?: string;
   negativePrompt?: string;
   aspectRatio?: string;
+  durations?: number[];
 }
 
 export interface AudioResult {
@@ -33,6 +34,7 @@ export interface ImageProvider {
     model?: string,
     options?: GenerateImageOptions,
   ): Promise<string>;
+  inpaint?(imageUrl: string, maskUrl: string, prompt?: string): Promise<string>;
 }
 
 export interface VideoProvider {

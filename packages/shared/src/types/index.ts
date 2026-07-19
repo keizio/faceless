@@ -195,6 +195,38 @@ export interface TextLayer {
   visible: boolean;
   locked: boolean;
   source: "ai" | "user";
+  underline?: boolean;
+  linethrough?: boolean;
+  charSpacing?: number;
+  lineHeight?: number;
+  textStroke?: string;
+  textStrokeWidth?: number;
+  textBackgroundColor?: string;
 }
 
 export type TextLayerMap = Record<string, TextLayer[]>;
+
+export type ShapeType = "rectangle" | "circle" | "line" | "arrow";
+
+export interface ShapeLayer {
+  id: string;
+  type: ShapeType;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fill: string;
+  stroke: string;
+  strokeWidth: number;
+  opacity: number;
+  angle: number;
+  visible: boolean;
+  locked: boolean;
+  rx?: number;
+  x2?: number;
+  y2?: number;
+}
+
+export type ShapeLayerMap = Record<string, ShapeLayer[]>;
+
+export type Layer = TextLayer | ShapeLayer;

@@ -44,6 +44,7 @@ import {
   ArrowRight,
   Download,
   PenTool,
+  ExternalLink,
 } from "lucide-react";
 
 const TYPE_ICONS: Record<string, typeof Image> = {
@@ -160,14 +161,23 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                                   </div>
                                 )}
                               </button>
-                              <a
-                                href={img.url}
-                                download
-                                className="absolute top-2 right-2 rounded-md bg-background/80 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
-                                aria-label="Download image"
-                              >
-                                <Download className="h-3.5 w-3.5" />
-                              </a>
+                              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Link
+                                  href={`/contents/${id}/editor?slide=${i}`}
+                                  className="rounded-md bg-background/80 p-1.5 hover:bg-background transition-colors"
+                                  aria-label="Edit image"
+                                >
+                                  <PenTool className="h-3.5 w-3.5" />
+                                </Link>
+                                <a
+                                  href={img.url}
+                                  download
+                                  className="rounded-md bg-background/80 p-1.5 hover:bg-background transition-colors"
+                                  aria-label="Download image"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                </a>
+                              </div>
                             </div>
                           );
                         })}
@@ -421,7 +431,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                       <Link href={`/contents/${id}/editor`}>
                         <Button variant="outline" className="text-primary w-full">
                           <PenTool className="mr-2 h-4 w-4" />
-                          Edit Text
+                          Edit Image
                         </Button>
                       </Link>
                     )}

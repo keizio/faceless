@@ -21,6 +21,21 @@ import {
 } from "../../lib/compositing/renderer.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
 import { applyWatermarkToBuffer } from "../../lib/compositing/watermark.js";
+import { mastra } from "../../mastra/index.js";
+import { parseJsonResponse } from "../../lib/prompts/parse-json.js";
+import {
+  renderAidaFramework,
+  renderPasFramework,
+  renderHeadlineFormula,
+  renderCtaPattern,
+  renderPersuasionPrinciple,
+  renderToneByChannel,
+} from "../../lib/prompts/copywriting-frameworks.js";
+import {
+  buildScriptWriterSystemPrompt,
+  buildQualityReviewerSystemPrompt,
+} from "../../lib/prompts/system-prompts.js";
+import type { CopywritingFramework, HeadlineFormula, CtaPattern } from "../../lib/prompts/types.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -120,88 +135,126 @@ const buildPromptContextStep = createStep({
   },
 });
 
+const scriptOutputSchema = z.object({
+  contentId: z.string(),
+  userId: z.string(),
+  contentType: z.enum(["image", "slide", "video", "text"]),
+  platform: z.string(),
+  prompt: z.string(),
+  language: z.string(),
+  script: z.string(),
+  caption: z.string(),
+  enhancedPrompt: z.string().optional(),
+  brandKitJson: z.string().optional(),
+  slideCount: z.number().optional(),
+  aspectRatio: z.string(),
+  templateId: z.string().optional(),
+  templateInputs: z.record(z.unknown()).optional(),
+  reviewScore: z.number().optional(),
+  reviewFeedback: z.array(z.string()).optional(),
+});
+
+const scriptInputSchema = z.object({
+  contentId: z.string(),
+  userId: z.string(),
+  contentType: z.enum(["image", "slide", "video", "text"]),
+  platform: z.string(),
+  prompt: z.string(),
+  language: z.string(),
+  avatarContext: z.string().optional(),
+  brandKitGuidance: z.string().optional(),
+  brandKitJson: z.string().optional(),
+  platformGuidance: z.string(),
+  slideCount: z.number().optional(),
+  aspectRatio: z.string(),
+  templateSystemPrompt: z.string().optional(),
+  templateVisualGuidance: z.string().optional(),
+  templateNegativeAdditions: z.array(z.string()).optional(),
+  templateScriptStructure: z.string().optional(),
+  templateNarrationGuidance: z.string().optional(),
+  templateId: z.string().optional(),
+  templateInputs: z.record(z.unknown()).optional(),
+});
+
+function buildScriptUserMessage(params: {
+  prompt: string;
+  contentType: string;
+  platform: string;
+  language: string;
+  templateScriptStructure?: string;
+  reviewFeedback?: string[];
+}): string {
+  const { prompt, contentType, platform, language, templateScriptStructure, reviewFeedback } = params;
+
+  const framework = "aida" as CopywritingFramework;
+  const headline = "curiosity-gap" as HeadlineFormula;
+  const cta = "low-friction" as CtaPattern;
+
+  const sections: string[] = [
+    `Create a ${contentType} script for ${platform} about: ${prompt}`,
+    `Language: ${language}`,
+  ];
+
+  if (framework !== "none") {
+    if (framework === "aida") sections.push(renderAidaFramework());
+    else if (framework === "pas") sections.push(renderPasFramework());
+  }
+
+  sections.push(renderHeadlineFormula(headline));
+  sections.push(renderCtaPattern(cta));
+  sections.push(renderPersuasionPrinciple("social-proof"));
+
+  if (templateScriptStructure) {
+    sections.push(`Script structure: ${templateScriptStructure}`);
+  }
+
+  if (reviewFeedback && reviewFeedback.length > 0) {
+    sections.push(``, `PREVIOUS VERSION FEEDBACK — improve on these points:`, ...reviewFeedback.map((f) => `- ${f}`));
+  }
+
+  sections.push(``, `Return ONLY valid JSON — no markdown, no code fences, no explanation.`);
+
+  return sections.join("\n");
+}
+
 const generateScriptStep = createStep({
   id: "generate-script",
-  description: "Generate script/caption from prompt with avatar and platform context",
-  inputSchema: z.object({
-    contentId: z.string(),
-    userId: z.string(),
-    contentType: z.enum(["image", "slide", "video", "text"]),
-    platform: z.string(),
-    prompt: z.string(),
-    language: z.string(),
-    avatarContext: z.string().optional(),
-    brandKitGuidance: z.string().optional(),
-    brandKitJson: z.string().optional(),
-    platformGuidance: z.string(),
-    slideCount: z.number().optional(),
-    aspectRatio: z.string(),
-    templateSystemPrompt: z.string().optional(),
-    templateVisualGuidance: z.string().optional(),
-    templateNegativeAdditions: z.array(z.string()).optional(),
-    templateScriptStructure: z.string().optional(),
-    templateNarrationGuidance: z.string().optional(),
-    templateId: z.string().optional(),
-    templateInputs: z.record(z.unknown()).optional(),
-  }),
-  outputSchema: z.object({
-    contentId: z.string(),
-    userId: z.string(),
-    contentType: z.enum(["image", "slide", "video", "text"]),
-    platform: z.string(),
-    prompt: z.string(),
-    script: z.string(),
-    caption: z.string(),
-    enhancedPrompt: z.string().optional(),
-    brandKitJson: z.string().optional(),
-    slideCount: z.number().optional(),
-    aspectRatio: z.string(),
-    templateId: z.string().optional(),
-    templateInputs: z.record(z.unknown()).optional(),
-  }),
+  description: "Generate script/caption from prompt using scriptWriter agent",
+  inputSchema: scriptInputSchema,
+  outputSchema: scriptOutputSchema,
   execute: async ({ inputData }) => {
-    const textProvider = getProviders().text;
-
     const isFaceless = !inputData.avatarContext || inputData.avatarContext.includes("no human figures");
 
-    const brandSection = inputData.brandKitGuidance ? `\n\nBrand identity:\n${inputData.brandKitGuidance}\n\nIncorporate the brand identity naturally into the content.` : "";
+    const agent = mastra.getAgent("scriptWriter");
 
-    const baseSystemPrompt = `You are a professional script writer for faceless social media content.
-Generate an engaging script for a ${inputData.contentType} on ${inputData.platform}.
-The script should hook the viewer in the first 3 seconds.
-
-Platform: ${inputData.platform}
-${inputData.platformGuidance}
-
-${isFaceless ? "FACELESS MODE: No human figures or faces. Focus on environment, objects, typography, and abstract visuals." : `AVATAR MODE: Write in this character's voice:\n${inputData.avatarContext}`}
-
-Language: ${inputData.language}
-${brandSection}
-Output format: JSON with "hook", "body", "cta", "caption" (with hashtags), and "visual_prompt" (a detailed visual description for AI image/video generation).
-
-CRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include slide numbers or scene numbering in the visual description.`;
-
-    const systemPrompt = inputData.templateSystemPrompt
-      ? `${inputData.templateSystemPrompt}\n\n${inputData.templateScriptStructure ? `Script structure: ${inputData.templateScriptStructure}` : ""}\n\nLanguage: ${inputData.language}\n\nOutput format: JSON with "hook", "body", "cta", "caption" (with hashtags), and "visual_prompt" (a detailed visual description for AI image/video generation).\n\nCRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include slide numbers or scene numbering in the visual description.`
-      : baseSystemPrompt;
-
-    const scriptResult = await textProvider.generate({
-      system: systemPrompt,
-      prompt: `Create a ${inputData.contentType} script for ${inputData.platform} about: ${inputData.prompt}`,
-      temperature: 0.8,
+    const userMessage = buildScriptUserMessage({
+      prompt: inputData.prompt,
+      contentType: inputData.contentType,
+      platform: inputData.platform,
+      language: inputData.language,
+      templateScriptStructure: inputData.templateScriptStructure,
     });
 
-    let script = scriptResult;
+    const response = await agent.generate(userMessage);
+    const text = (response as { text: string }).text;
+
+    let script = text;
     let caption = "";
     let enhancedPrompt = "";
 
     try {
-      const parsed = JSON.parse(scriptResult);
-      script = `${parsed.hook}\n\n${parsed.body}\n\n${parsed.cta}`;
+      const parsed = parseJsonResponse<{
+        hook?: string;
+        body?: string;
+        cta?: string;
+        caption?: string;
+        visual_prompt?: string;
+      }>(text);
+      script = `${parsed.hook ?? ""}\n\n${parsed.body ?? ""}\n\n${parsed.cta ?? ""}`;
       caption = parsed.caption ?? "";
       enhancedPrompt = parsed.visual_prompt ?? "";
     } catch {
-      script = scriptResult;
+      script = text;
     }
 
     await db
@@ -222,6 +275,7 @@ CRITICAL: Never include fake social media statistics, follower counts, like coun
       contentType: inputData.contentType,
       platform: inputData.platform,
       prompt: inputData.prompt,
+      language: inputData.language,
       script,
       caption,
       enhancedPrompt,
@@ -230,6 +284,123 @@ CRITICAL: Never include fake social media statistics, follower counts, like coun
       aspectRatio: inputData.aspectRatio,
       templateId: inputData.templateId,
       templateInputs: inputData.templateInputs,
+    };
+  },
+});
+
+const MAX_REVIEW_RETRIES = 2;
+const MIN_ACCEPTABLE_SCORE = 6;
+
+const reviewScriptStep = createStep({
+  id: "review-script",
+  description: "Review script quality and regenerate if score is below threshold",
+  inputSchema: scriptOutputSchema,
+  outputSchema: scriptOutputSchema,
+  execute: async ({ inputData }) => {
+    const reviewerAgent = mastra.getAgent("qualityReviewer");
+    const writerAgent = mastra.getAgent("scriptWriter");
+
+    const reviewMessage = `Review this social media content script:
+
+Platform: ${inputData.platform}
+Content type: ${inputData.contentType}
+
+Script:
+${inputData.script}
+
+Caption:
+${inputData.caption}
+
+Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
+
+    let bestScript = inputData.script;
+    let bestCaption = inputData.caption;
+    let bestEnhancedPrompt = inputData.enhancedPrompt;
+    let bestScore = 0;
+    let bestFeedback: string[] = [];
+
+    for (let attempt = 0; attempt <= MAX_REVIEW_RETRIES; attempt++) {
+      try {
+        const reviewResponse = await reviewerAgent.generate(reviewMessage);
+        const reviewText = (reviewResponse as { text: string }).text;
+        const review = parseJsonResponse<{
+          approved?: boolean;
+          score?: number;
+          hookScore?: number;
+          ctaScore?: number;
+          issues?: Array<{ severity: string; description: string }>;
+          improvements?: string[];
+        }>(reviewText);
+
+        const score = review.score ?? 0;
+        const feedback = review.improvements ?? [];
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestFeedback = feedback;
+        }
+
+        if (score >= MIN_ACCEPTABLE_SCORE) {
+          break;
+        }
+
+        if (attempt < MAX_REVIEW_RETRIES) {
+          const regenMessage = buildScriptUserMessage({
+            prompt: inputData.prompt,
+            contentType: inputData.contentType,
+            platform: inputData.platform,
+            language: inputData.language,
+            reviewFeedback: feedback,
+          });
+
+          const regenResponse = await writerAgent.generate(regenMessage);
+          const regenText = (regenResponse as { text: string }).text;
+
+          try {
+            const parsed = parseJsonResponse<{
+              hook?: string;
+              body?: string;
+              cta?: string;
+              caption?: string;
+              visual_prompt?: string;
+            }>(regenText);
+            bestScript = `${parsed.hook ?? ""}\n\n${parsed.body ?? ""}\n\n${parsed.cta ?? ""}`;
+            bestCaption = parsed.caption ?? bestCaption;
+            bestEnhancedPrompt = parsed.visual_prompt ?? bestEnhancedPrompt;
+          } catch {
+            bestScript = regenText;
+          }
+        }
+      } catch (error) {
+        console.error(`[review-script] Review attempt ${attempt + 1} failed:`, error);
+        break;
+      }
+    }
+
+    if (bestScript !== inputData.script || bestCaption !== inputData.caption) {
+      const isFaceless = !inputData.prompt.includes("avatar");
+      await db
+        .update(contents)
+        .set({
+          script: bestScript,
+          metadata: {
+            enhancedPrompt: bestEnhancedPrompt,
+            hasAvatar: !isFaceless,
+            platform: inputData.platform,
+            reviewScore: bestScore,
+            reviewFeedback: bestFeedback,
+          },
+        })
+        .where(eq(contents.id, inputData.contentId));
+    }
+
+    return {
+      ...inputData,
+      script: bestScript,
+      caption: bestCaption,
+      enhancedPrompt: bestEnhancedPrompt,
+      reviewScore: bestScore,
+      reviewFeedback: bestFeedback,
     };
   },
 });
@@ -243,6 +414,7 @@ const generateSlideImagesStep = createStep({
     contentType: z.enum(["image", "slide", "video", "text"]),
     platform: z.string(),
     prompt: z.string(),
+    language: z.string(),
     script: z.string(),
     caption: z.string(),
     enhancedPrompt: z.string().optional(),
@@ -251,6 +423,8 @@ const generateSlideImagesStep = createStep({
     aspectRatio: z.string(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
+    reviewScore: z.number().optional(),
+    reviewFeedback: z.array(z.string()).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -568,6 +742,7 @@ export const generateContentWorkflow = createWorkflow({
 })
   .then(buildPromptContextStep)
   .then(generateScriptStep)
+  .then(reviewScriptStep)
   .then(generateSlideImagesStep)
   .then(compositeSlideStep)
   .then(saveSlideVersionStep);

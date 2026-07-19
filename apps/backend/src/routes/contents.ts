@@ -105,19 +105,33 @@ contentRoutes.get("/:id/text-layers", async (c) => {
 contentRoutes.patch("/:id/text-layers", validate(saveTextLayersSchema), async (c) => {
   const userId = c.get("userId");
   const contentId = c.req.param("id")!;
-  const { versionId, textLayers } = c.get("validated") as SaveTextLayersInput;
+  const { versionId, textLayers, shapeLayers } = c.get("validated") as SaveTextLayersInput;
   const service = new ContentService();
-  const result = await service.saveTextLayers(userId, contentId, versionId, textLayers);
+  const result = await service.saveTextLayers(userId, contentId, versionId, textLayers, shapeLayers);
   return c.json(result);
 });
 
 contentRoutes.post("/:id/editor-export", validate(editorExportSchema), async (c) => {
   const userId = c.get("userId");
   const contentId = c.req.param("id")!;
-  const { imageUrls, textLayers } = c.get("validated") as EditorExportInput;
+  const { imageUrls, textLayers, shapeLayers } = c.get("validated") as EditorExportInput;
   const service = new ContentService();
-  const result = await service.createEditorVersion(userId, contentId, imageUrls, textLayers);
+  const result = await service.createEditorVersion(userId, contentId, imageUrls, textLayers, shapeLayers);
   return c.json(result, 201);
+});
+
+contentRoutes.post("/:id/inpaint", async (c) => {
+  const userId = c.get("userId");
+  const contentId = c.req.param("id")!;
+  const { imageUrl, maskDataUrl } = await c.req.json();
+
+  if (!imageUrl || !maskDataUrl) {
+    return c.json({ error: "imageUrl and maskDataUrl are required" }, 400);
+  }
+
+  const service = new ContentService();
+  const result = await service.inpaintImage(userId, contentId, imageUrl, maskDataUrl);
+  return c.json(result);
 });
 
 contentRoutes.delete("/:id", async (c) => {

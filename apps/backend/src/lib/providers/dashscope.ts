@@ -271,6 +271,52 @@ export class DashScopeImageProvider implements ImageProvider {
 
     return downloadAndStoreImageUrl(imageUrl);
   }
+
+  async inpaint(imageUrl: string, maskUrl: string, prompt?: string): Promise<string> {
+    const body = {
+      model: IMAGE_MODEL,
+      input: {
+        messages: [
+          {
+            role: "user",
+            content: [
+              { image: imageUrl },
+              { image: maskUrl },
+              { text: prompt ?? "Remove the masked area and fill with natural background" },
+            ],
+          },
+        ],
+      },
+      parameters: {
+        size: "1080*1920",
+        n: 1,
+      },
+    };
+
+    const { taskId, output } = await submitDashScopeTask(IMAGE_URL, body);
+
+    let resultOutput: Record<string, unknown>;
+    if (taskId) {
+      resultOutput = await pollDashScopeTask(taskId);
+    } else if (output) {
+      resultOutput = output;
+    } else {
+      throw new Error("DashScope inpaint API returned no task_id or output");
+    }
+
+    const choices = (resultOutput as { choices?: { message?: { content?: { image?: string }[] } }[] }).choices;
+    const imageResult = choices?.[0]?.message?.content?.[0]?.image;
+    if (!imageResult) throw new Error("No inpainted image generated");
+
+    if (imageResult.startsWith("data:")) {
+      const base64Match = imageResult.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (!base64Match) throw new Error("Invalid image data URL format");
+      const ext = base64Match[1] === "jpeg" ? "jpg" : base64Match[1];
+      const buffer = Buffer.from(base64Match[2], "base64");
+      return uploadFile(buffer, randomFilename(ext), `image/${ext}`);
+    }
+    return downloadAndStoreImageUrl(imageResult);
+  }
 }
 
 export class DashScopeVideoProvider implements VideoProvider {
@@ -310,7 +356,7 @@ export class DashScopeVideoProvider implements VideoProvider {
         },
         parameters: {
           resolution: resolutionMap[aspectRatio] ?? "720P",
-          duration: 5,
+          duration: _options?.durations?.[i] ?? 5,
         },
       };
 

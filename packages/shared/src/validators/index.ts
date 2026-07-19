@@ -78,16 +78,44 @@ export const textLayerSchema = z.object({
   visible: z.boolean().default(true),
   locked: z.boolean().default(false),
   source: z.enum(["ai", "user"]).default("user"),
+  underline: z.boolean().default(false),
+  linethrough: z.boolean().default(false),
+  charSpacing: z.number().default(0),
+  lineHeight: z.number().default(1.2),
+  textStroke: z.string().default("transparent"),
+  textStrokeWidth: z.number().min(0).max(10).default(0),
+  textBackgroundColor: z.string().default("transparent"),
+});
+
+export const shapeLayerSchema = z.object({
+  id: z.string().uuid(),
+  type: z.enum(["rectangle", "circle", "line", "arrow"]),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().min(1),
+  height: z.number().min(1),
+  fill: z.string().default("transparent"),
+  stroke: z.string().default("#ffffff"),
+  strokeWidth: z.number().min(0).max(20).default(2),
+  opacity: z.number().min(0).max(1).default(1),
+  angle: z.number().default(0),
+  visible: z.boolean().default(true),
+  locked: z.boolean().default(false),
+  rx: z.number().min(0).optional(),
+  x2: z.number().optional(),
+  y2: z.number().optional(),
 });
 
 export const saveTextLayersSchema = z.object({
   versionId: z.string().uuid(),
   textLayers: z.record(z.array(textLayerSchema)),
+  shapeLayers: z.record(z.array(shapeLayerSchema)).optional(),
 });
 
 export const editorExportSchema = z.object({
   imageUrls: z.array(z.string().url()).min(1),
   textLayers: z.record(z.array(textLayerSchema)),
+  shapeLayers: z.record(z.array(shapeLayerSchema)).optional(),
 });
 
 export type CreateContentInput = z.infer<typeof createContentSchema>;
@@ -99,3 +127,4 @@ export type BrandKitColorsInput = z.infer<typeof brandKitColorsSchema>;
 export type TextLayerInput = z.infer<typeof textLayerSchema>;
 export type SaveTextLayersInput = z.infer<typeof saveTextLayersSchema>;
 export type EditorExportInput = z.infer<typeof editorExportSchema>;
+export type ShapeLayerInput = z.infer<typeof shapeLayerSchema>;

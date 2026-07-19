@@ -23,6 +23,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+function attachProgressWatcher(run: any, jobId: string, totalSteps: number) {
+  run.watch((event: any) => {
+    const steps = event.payload?.workflowState?.steps;
+    if (!steps) return;
+    const completed = Object.values(steps).filter(
+      (s: any) => s.status === "success" || s.status === "failed"
+    ).length;
+    const progress = Math.min(99, Math.round((completed / totalSteps) * 100));
+    db.update(generationJobs)
+      .set({ progress })
+      .where(eq(generationJobs.id, jobId))
+      .then(() => {})
+      .catch(() => {});
+  });
+}
+
 export async function runContentPipeline(payload: GenerationJobPayload) {
   const { jobId, userId, contentType, platform, prompt, avatarId } = payload;
   const contentId = payload.contentId!;
@@ -65,6 +81,7 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
       case "image": {
         const workflow = mastra.getWorkflow("generateImageWorkflow");
         const run = await workflow.createRunAsync();
+        attachProgressWatcher(run, jobId, 6);
         result = await withTimeout(
           run.start({
             inputData: {
@@ -90,6 +107,7 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
           const ti = payload.templateInputs ?? {};
           const workflow = mastra.getWorkflow("generateMusicVideoWorkflow");
           const run = await workflow.createRunAsync();
+          attachProgressWatcher(run, jobId, 6);
           result = await withTimeout(
             run.start({
               inputData: {
@@ -118,6 +136,7 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
 
           const workflow = mastra.getWorkflow("generateVideoWorkflow");
           const run = await workflow.createRunAsync();
+          attachProgressWatcher(run, jobId, 9);
           result = await withTimeout(
             run.start({
               inputData: {
@@ -148,6 +167,7 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
 
         const workflow = mastra.getWorkflow("generateContentWorkflow");
         const run = await workflow.createRunAsync();
+        attachProgressWatcher(run, jobId, 6);
         result = await withTimeout(
           run.start({
             inputData: {
@@ -173,6 +193,7 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
       case "text": {
         const workflow = mastra.getWorkflow("generateContentWorkflow");
         const run = await workflow.createRunAsync();
+        attachProgressWatcher(run, jobId, 6);
         result = await withTimeout(
           run.start({
             inputData: {

@@ -19,6 +19,8 @@ import {
   AlignCenter,
   AlignRight,
   Trash2,
+  Underline,
+  Strikethrough,
 } from "lucide-react";
 
 const FONT_FAMILIES = [
@@ -39,11 +41,21 @@ interface TextToolbarProps {
 export function TextToolbar({ onUpdateLayer, onRemoveLayer }: TextToolbarProps) {
   const selectedLayerId = useCanvasEditorStore((s) => s.selectedLayerId);
   const textLayers = useCanvasEditorStore((s) => s.textLayers);
+  const shapeLayers = useCanvasEditorStore((s) => s.shapeLayers);
   const activeSlideIndex = useCanvasEditorStore((s) => s.activeSlideIndex);
 
   const slideKey = `slide-${activeSlideIndex}`;
   const layers = textLayers[slideKey] || [];
+  const sLayers = shapeLayers[slideKey] || [];
   const selectedLayer = layers.find((l) => l.id === selectedLayerId);
+
+  if (sLayers.some((l) => l.id === selectedLayerId)) {
+    return (
+      <div className="flex items-center gap-2 p-3 border-b border-border/50 text-sm text-muted-foreground">
+        Shape layer selected — use the Shape Toolbar or canvas to edit
+      </div>
+    );
+  }
 
   if (!selectedLayer) {
     return (
@@ -116,6 +128,28 @@ export function TextToolbar({ onUpdateLayer, onRemoveLayer }: TextToolbarProps) 
         >
           <Italic className="h-3.5 w-3.5" />
         </Button>
+        <Button
+          variant={selectedLayer.underline ? "default" : "outline"}
+          size="icon-sm"
+          onClick={() =>
+            onUpdateLayer(selectedLayer.id, {
+              underline: !selectedLayer.underline,
+            })
+          }
+        >
+          <Underline className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant={selectedLayer.linethrough ? "default" : "outline"}
+          size="icon-sm"
+          onClick={() =>
+            onUpdateLayer(selectedLayer.id, {
+              linethrough: !selectedLayer.linethrough,
+            })
+          }
+        >
+          <Strikethrough className="h-3.5 w-3.5" />
+        </Button>
       </div>
 
       <div className="flex items-center gap-1">
@@ -169,6 +203,78 @@ export function TextToolbar({ onUpdateLayer, onRemoveLayer }: TextToolbarProps) 
         <span className="text-xs text-muted-foreground w-8">
           {Math.round(selectedLayer.opacity * 100)}%
         </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Label className="text-xs text-muted-foreground">Spacing</Label>
+        <input
+          type="range"
+          min={0}
+          max={50}
+          step={1}
+          value={selectedLayer.charSpacing ?? 0}
+          onChange={(e) =>
+            onUpdateLayer(selectedLayer.id, { charSpacing: Number(e.target.value) })
+          }
+          className="w-20"
+        />
+        <span className="text-xs text-muted-foreground w-6">
+          {selectedLayer.charSpacing ?? 0}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Label className="text-xs text-muted-foreground">Line H</Label>
+        <input
+          type="range"
+          min={1}
+          max={3}
+          step={0.1}
+          value={selectedLayer.lineHeight ?? 1.2}
+          onChange={(e) =>
+            onUpdateLayer(selectedLayer.id, { lineHeight: Number(e.target.value) })
+          }
+          className="w-20"
+        />
+        <span className="text-xs text-muted-foreground w-8">
+          {(selectedLayer.lineHeight ?? 1.2).toFixed(1)}
+        </span>
+      </div>
+
+      <div className="relative flex items-center gap-2 z-20">
+        <Label className="text-xs text-muted-foreground">Stroke</Label>
+        <input
+          type="color"
+          value={selectedLayer.textStroke ?? "#000000"}
+          onChange={(e) => onUpdateLayer(selectedLayer.id, { textStroke: e.target.value })}
+          className="relative h-8 w-8 cursor-pointer rounded border border-border z-20"
+          style={{ zIndex: 20 }}
+        />
+        <input
+          type="range"
+          min={0}
+          max={10}
+          step={1}
+          value={selectedLayer.textStrokeWidth ?? 0}
+          onChange={(e) =>
+            onUpdateLayer(selectedLayer.id, { textStrokeWidth: Number(e.target.value) })
+          }
+          className="w-16"
+        />
+        <span className="text-xs text-muted-foreground w-4">
+          {selectedLayer.textStrokeWidth ?? 0}
+        </span>
+      </div>
+
+      <div className="relative flex items-center gap-2 z-20">
+        <Label className="text-xs text-muted-foreground">BG</Label>
+        <input
+          type="color"
+          value={selectedLayer.textBackgroundColor ?? "#000000"}
+          onChange={(e) => onUpdateLayer(selectedLayer.id, { textBackgroundColor: e.target.value })}
+          className="relative h-8 w-8 cursor-pointer rounded border border-border z-20"
+          style={{ zIndex: 20 }}
+        />
       </div>
 
       <div className="ml-auto">

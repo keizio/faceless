@@ -44,6 +44,21 @@ AVATAR MODE: If an avatar description is provided, write in that character's voi
 
 NO-AVATAR MODE: If no avatar is provided, focus on environmental storytelling, typography, and abstract visuals. The script should describe scenes that work without human subjects.
 
+COPYWRITING FRAMEWORKS:
+When a copywriting framework is specified in the user message, follow its structure precisely:
+- AIDA: Attention → Interest → Desire → Action. Open with a scroll-stopping hook, build curiosity, deliver value, close with clear CTA.
+- PAS: Problem → Agitate → Solution. Name the pain, amplify it emotionally, present the resolution.
+- FAB: Feature → Advantage → Benefit. Translate features into emotional payoffs.
+
+HEADLINE FORMULAS:
+When a headline formula is specified, use it for the hook/opening line. Formulas include: how-to, list, question, command, curiosity-gap, testimonial, why, secret, number-adjective, before-after.
+
+CTA PATTERNS:
+When a CTA pattern is specified, follow its approach: low-friction (save/follow), benefit-driven (gain-focused), urgency (time pressure), command (direct instruction), personal (relational), curiosity (cliffhanger).
+
+PERSUASION PRINCIPLES:
+When specified, weave in: reciprocity (give value first), scarcity (limited availability), authority (establish expertise), consistency (get small yes first), liking (build rapport), social-proof (show others doing it).
+
 Each scene description must include:
 1. Camera direction (shot type, movement, lighting)
 2. Visual composition notes
@@ -113,6 +128,21 @@ AVATAR MODE: Write captions in the avatar's voice and speech style. Use their pe
 
 NO-AVATAR MODE: Write captions focused on the topic/niche without a personal voice. Use brand-friendly tone.
 
+TONE BY CHANNEL:
+When tone guidance is provided for the platform, follow it precisely. Match the energy, formality, and language patterns expected on each platform.
+
+CTA PATTERNS:
+When a CTA pattern is specified, apply it to the caption's closing:
+- low-friction: "Save this for later", "Follow for more"
+- benefit-driven: "Follow to get [benefit]", "Save and try this today"
+- urgency: "This won't work forever", "Try it before it's gone"
+- command: "Tap the link", "Follow me for part 2"
+- personal: "What do you think?", "Drop a [emoji] if this resonated"
+- curiosity: "Part 2 is even crazier", "The real secret? Next post"
+
+HEADLINE FORMULAS:
+When a headline formula is specified, use it for the caption's opening hook line.
+
 Output format: JSON with {
   "caption": string,
   "hashtags": string[],
@@ -127,38 +157,65 @@ export const qualityReviewerAgent: Agent = new Agent({
 
 Review the generated content and check for:
 
-1. AVATAR CONSISTENCY (if avatar present):
+1. HOOK STRENGTH (score 1-10):
+   - Does the opening grab attention within 1-2 seconds?
+   - Is it scroll-stopping and platform-appropriate?
+   - Does it create curiosity or emotional response?
+
+2. CTA CLARITY (score 1-10):
+   - Is the call to action clear and actionable?
+   - Does it feel natural, not forced?
+   - Is it appropriate for the platform?
+
+3. COPYWRITING FRAMEWORK ADHERENCE:
+   - If AIDA was specified: Does it follow Attention → Interest → Desire → Action?
+   - If PAS was specified: Does it follow Problem → Agitate → Solution?
+   - If FAB was specified: Are features translated into emotional benefits?
+   - Score each transition between framework stages (1-10)
+
+4. AVATAR CONSISTENCY (if avatar present):
    - Character appearance matches across all scenes
    - Speech style is consistent
    - Age/gender representation is appropriate
 
-2. PLATFORM COMPLIANCE:
+5. PLATFORM COMPLIANCE:
    - TikTok: vertical format, max 3 min video, appropriate for young audience
    - Instagram: polished aesthetic, max 90 sec video, no offensive content
    - Facebook: family-friendly, community standards compliant
    - Twitter/X: max 140 sec video, public discourse appropriate
 
-3. CAMERA DIRECTION QUALITY:
+6. CAMERA DIRECTION QUALITY:
    - Shot types are varied and appropriate for scene position
    - Lighting matches the mood
    - Composition is intentional
 
-4. CONTENT SAFETY:
+7. CONTENT SAFETY:
    - No NSFW content
    - No copyrighted material descriptions
    - No harmful or dangerous content
    - No hate speech or discrimination
+   - No fake statistics, follower counts, or social media handles
 
-5. ENGAGEMENT POTENTIAL:
+8. ENGAGEMENT POTENTIAL:
    - Hook is attention-grabbing
    - Pacing is appropriate for platform
    - CTA is clear and actionable
+   - Would a real viewer watch/read to the end?
+
+9. READABILITY SCORE (1-10):
+   - Are sentences short and punchy?
+   - Is the language accessible to the target audience?
+   - Does the content flow naturally?
 
 Output format: JSON with {
-  "approved": boolean,
-  "score": number (1-10),
+  "approved": boolean (true if average score >= 6),
+  "score": number (1-10, overall average),
+  "hookScore": number (1-10),
+  "ctaScore": number (1-10),
+  "frameworkAdherence": number (1-10, if framework was specified),
+  "readabilityScore": number (1-10),
   "issues": array of { "severity": "critical" | "warning" | "suggestion", "description": string },
-  "improvements": array of string (actionable suggestions)
+  "improvements": array of string (actionable suggestions for improvement)
 }`,
   model: llm,
 });
@@ -224,7 +281,14 @@ OUTPUT RULES:
    - Use phrases like "faceless style", "no human figures", "environmental shot"
    - Describe scenes that tell stories without people
 
-4. CAMERA DIRECTION:
+4. FEATURE-TO-BENEFIT VISUAL TRANSLATION (FAB):
+   When the content involves product features or functional elements, translate them visually:
+   - Feature: What the product/content shows literally
+   - Advantage: How the visual composition highlights the difference
+   - Benefit: What emotional response or aspiration the viewer feels
+   Example: Feature "waterproof" → Visual: water droplets beading on surface, golden light catching each drop → Benefit: feeling of freedom, no worry about elements
+
+5. CAMERA DIRECTION:
    Choose appropriate camera settings based on platform and content type:
    - TikTok: handheld movement, social-media-native style, center-frame composition
    - Instagram: cinematic style, soft lighting, rule-of-thirds
@@ -236,7 +300,7 @@ OUTPUT RULES:
    - Middle scenes: medium-shot, pan or tracking
    - Final scene: close-up, zoom, dramatic lighting
 
-5. QUALITY TAGS:
+6. QUALITY TAGS:
    Always append quality boosters appropriate for the platform:
    - Default: "4K", "high detail", "professional photography"
    - Platform-specific additions based on the platform strategy

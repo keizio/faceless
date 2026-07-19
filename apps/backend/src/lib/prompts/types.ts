@@ -1,6 +1,11 @@
 import type { Platform, ContentType, SpeechStyle, BrandKit } from "@faceless/shared";
 export type { Platform, ContentType };
 
+export type ContentGoal = "awareness" | "engagement" | "conversion" | "education" | "entertainment";
+export type CopywritingFramework = "aida" | "pas" | "fab" | "none";
+export type HeadlineFormula = "how-to" | "list" | "question" | "command" | "curiosity-gap" | "testimonial" | "why" | "secret" | "number-adjective" | "before-after";
+export type CtaPattern = "low-friction" | "benefit-driven" | "urgency" | "command" | "personal" | "curiosity";
+
 export interface CameraDirection {
   shotType:
     | "close-up"
@@ -67,6 +72,10 @@ export interface PromptContext {
   brandKit?: BrandKit;
   sceneIndex?: number;
   totalScenes?: number;
+  contentGoal?: ContentGoal;
+  copywritingFramework?: CopywritingFramework;
+  headlineFormula?: HeadlineFormula;
+  ctaPattern?: CtaPattern;
 }
 
 export interface EnhancedPrompt {

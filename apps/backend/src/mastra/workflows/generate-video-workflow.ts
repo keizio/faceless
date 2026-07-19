@@ -26,6 +26,17 @@ import {
 import { uploadFile, randomFilename } from "../../lib/storage.js";
 import { applyWatermarkToBuffer } from "../../lib/compositing/watermark.js";
 import { composeVideoWithAudio } from "../../lib/compositing/video-composer.js";
+import { mastra } from "../../mastra/index.js";
+import { parseJsonResponse } from "../../lib/prompts/parse-json.js";
+import {
+  renderAidaFramework,
+  renderPasFramework,
+  renderHeadlineFormula,
+  renderCtaPattern,
+  renderPersuasionPrinciple,
+  renderToneByChannel,
+} from "../../lib/prompts/copywriting-frameworks.js";
+import type { CopywritingFramework, HeadlineFormula, CtaPattern } from "../../lib/prompts/types.js";
 
 async function downloadImageAsBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
@@ -90,35 +101,27 @@ const enhanceVideoPromptStep = createStep({
       inputData.aspectRatio,
     );
 
-    const textProvider = getProviders().text;
-
     const isFaceless = !context.avatar;
 
-    const baseSystemPrompt = `You are a visual prompt engineer for video generation. Create a storyboard-level visual prompt for a ${inputData.sceneCount}-scene video.
+    const agent = mastra.getAgent("promptEnhancer");
 
-Platform: ${inputData.platform}
-${isFaceless ? "FACELESS MODE: NO human figures, NO faces. Focus on environments, objects, text overlays, and abstract visuals." : `AVATAR MODE: Character: ${context.avatar!.name}, ${context.avatar!.age ?? ""} years old, ${context.avatar!.gender ?? ""}, style: ${context.avatar!.speechStyle ?? "neutral"}.`}
+    const userMessage = `Create a visual storyboard for a ${inputData.sceneCount}-scene ${inputData.platform} video about: ${inputData.prompt}. Aspect ratio: ${inputData.aspectRatio}.
 
-Output format: JSON with {
-  "visualPrompt": string (overall storyboard visual description),
-  "cameraDirection": { "shotType": string, "movement"?: string, "lighting": string, "composition"?: string, "style"?: string },
-  "qualityTags": string[],
-  "scenePrompts": string[] (${inputData.sceneCount} individual scene visual descriptions)
-}`;
+Include ${inputData.sceneCount} individual scene visual descriptions in a "scenePrompts" array.
 
-    const systemPrompt = inputData.templateSystemPrompt
-      ? `${inputData.templateSystemPrompt}\n\n${inputData.templateVisualGuidance ? `Visual guidance: ${inputData.templateVisualGuidance}` : ""}\n\nPlatform: ${inputData.platform}\n${isFaceless ? "FACELESS MODE: NO human figures, NO faces." : `AVATAR MODE: Character: ${context.avatar!.name}.`}\n\nOutput format: JSON with {\n  "visualPrompt": string (overall storyboard visual description),\n  "cameraDirection": { "shotType": string, "movement"?: string, "lighting": string, "composition"?: string, "style"?: string },\n  "qualityTags": string[],\n  "scenePrompts": string[] (${inputData.sceneCount} individual scene visual descriptions)\n}`
-      : baseSystemPrompt;
+Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
 
-    const result = await textProvider.generate({
-      system: systemPrompt,
-      prompt: `Create a visual storyboard for a ${inputData.sceneCount}-scene ${inputData.platform} video about: ${inputData.prompt}. Aspect ratio: ${inputData.aspectRatio}.`,
-      temperature: 0.7,
-    });
+    const response = await agent.generate(userMessage);
+    const result = (response as { text: string }).text;
 
     let enhanced: EnhancedPrompt & { scenePrompts: string[] };
     try {
-      const parsed = JSON.parse(result);
+      const parsed = parseJsonResponse<{
+        visualPrompt?: string;
+        cameraDirection?: EnhancedPrompt["cameraDirection"];
+        qualityTags?: string[];
+        scenePrompts?: string[];
+      }>(result);
       enhanced = {
         visualPrompt: parsed.visualPrompt ?? inputData.prompt,
         cameraDirection: parsed.cameraDirection ?? {
@@ -218,56 +221,90 @@ const generateVideoScriptStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    sceneNarrations: z.array(z.string()),
     brandKitJson: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     templateId: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
-    const textProvider = getProviders().text;
     const strategy = PLATFORM_STRATEGIES[inputData.platform as Platform] ?? PLATFORM_STRATEGIES.generic;
 
     const isFaceless = inputData.isFaceless;
     const avatarContext = inputData.avatarContext ?? "";
 
-    const brandSection = inputData.brandKitGuidance ? `\n\nBrand identity:\n${inputData.brandKitGuidance}\n\nIncorporate the brand identity naturally into the content.` : "";
+    const agent = mastra.getAgent("scriptWriter");
 
-    const baseSystemPrompt = `You are a professional script writer for faceless social media videos.
-Generate an engaging script for a ${inputData.sceneCount}-scene video on ${inputData.platform}.
-The script should hook the viewer in the first 3 seconds.
+    const platform = inputData.platform as Platform;
+    const framework: CopywritingFramework = "aida";
+    const headline: HeadlineFormula = "curiosity-gap";
+    const cta: CtaPattern = "low-friction";
 
-Platform: ${inputData.platform}
-${strategy.visualStyleGuidance}
+    const sections: string[] = [
+      `Create a ${inputData.sceneCount}-scene video script for ${inputData.platform} about: ${inputData.prompt}`,
+      `Language: ${inputData.language}`,
+    ];
 
-${isFaceless ? "FACELESS MODE: No human figures or faces. Focus on environment, objects, typography, and abstract visuals." : `AVATAR MODE: Write in this character's voice:\n${avatarContext}`}
+    if (framework === "aida") sections.push(renderAidaFramework());
+    else if (framework === "pas") sections.push(renderPasFramework());
 
-Language: ${inputData.language}
-${brandSection}
-Output format: JSON with "hook", "body", "cta", "caption" (with hashtags), and "narration" (full voiceover text for the entire video).
+    sections.push(renderHeadlineFormula(headline));
+    sections.push(renderCtaPattern(cta));
+    sections.push(renderPersuasionPrinciple("social-proof"));
 
-CRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include scene numbering in the visual description.`;
+    if (inputData.brandKitGuidance) {
+      sections.push(``, `Brand identity:`, inputData.brandKitGuidance);
+    }
 
-    const systemPrompt = inputData.templateSystemPrompt
-      ? `${inputData.templateSystemPrompt}\n\n${inputData.templateScriptStructure ? `Script structure: ${inputData.templateScriptStructure}` : ""}\n\n${inputData.templateNarrationGuidance ? `Narration: ${inputData.templateNarrationGuidance}` : ""}\n\nLanguage: ${inputData.language}\n\nOutput format: JSON with "hook", "body", "cta", "caption" (with hashtags), and "narration" (full voiceover text for the entire video).\n\nCRITICAL: Never include fake social media statistics, follower counts, like counts, or social media account handles (@username, @handle) in the caption or script. Never include scene numbering in the visual description.`
-      : baseSystemPrompt;
+    if (inputData.templateScriptStructure) {
+      sections.push(``, `Script structure: ${inputData.templateScriptStructure}`);
+    }
 
-    const scriptResult = await textProvider.generate({
-      system: systemPrompt,
-      prompt: `Create a ${inputData.sceneCount}-scene video script for ${inputData.platform} about: ${inputData.prompt}`,
-      temperature: 0.8,
-    });
+    if (inputData.templateNarrationGuidance) {
+      sections.push(``, `Narration: ${inputData.templateNarrationGuidance}`);
+    }
+
+    sections.push(
+      ``,
+      `Include a "narration" field with the full voiceover text for the entire video.`,
+      `Each scene in the "scenes" array must also include its own "narration" field with the voiceover text for that specific scene.`,
+      `Return ONLY valid JSON with "hook", "scenes" (array with "narration" per scene), "cta", "caption", "narration" — no markdown, no code fences, no explanation.`,
+    );
+
+    const userMessage = sections.join("\n");
+
+    const response = await agent.generate(userMessage);
+    const scriptResult = (response as { text: string }).text;
 
     let script = scriptResult;
     let caption = "";
     let narrationText = "";
+    let sceneNarrations: string[] = [];
 
     try {
-      const parsed = JSON.parse(scriptResult);
-      script = `${parsed.hook}\n\n${parsed.body}\n\n${parsed.cta}`;
+      const parsed = parseJsonResponse<{
+        hook?: string;
+        body?: string;
+        cta?: string;
+        caption?: string;
+        narration?: string;
+        scenes?: { narration?: string; visual_description?: string; camera_direction?: unknown }[];
+      }>(scriptResult);
+      script = `${parsed.hook ?? ""}\n\n${parsed.body ?? ""}\n\n${parsed.cta ?? ""}`;
       caption = parsed.caption ?? "";
       narrationText = parsed.narration ?? script;
+
+      const parsedScenes = parsed.scenes ?? [];
+      sceneNarrations = parsedScenes
+        .map((s) => s.narration ?? "")
+        .filter((n) => n.length > 0);
+
+      if (sceneNarrations.length === 0 && narrationText) {
+        sceneNarrations = [narrationText];
+      }
     } catch {
       script = scriptResult;
       narrationText = scriptResult;
+      sceneNarrations = narrationText ? [narrationText] : [];
     }
 
     await db
@@ -296,9 +333,166 @@ CRITICAL: Never include fake social media statistics, follower counts, like coun
       script,
       caption,
       narrationText,
+      sceneNarrations,
       brandKitJson: inputData.brandKitJson,
       templateInputs: inputData.templateInputs,
       templateId: inputData.templateId,
+    };
+  },
+});
+
+const videoScriptOutputSchema = z.object({
+  contentId: z.string(),
+  userId: z.string(),
+  prompt: z.string(),
+  aspectRatio: z.string(),
+  sceneCount: z.number(),
+  platform: z.string(),
+  language: z.string(),
+  avatarId: z.string().optional(),
+  enhancedPrompt: z.any(),
+  promptContext: z.any(),
+  script: z.string(),
+  caption: z.string(),
+  narrationText: z.string(),
+  sceneNarrations: z.array(z.string()),
+  brandKitJson: z.string().optional(),
+  templateInputs: z.record(z.unknown()).optional(),
+  templateId: z.string().optional(),
+  reviewScore: z.number().optional(),
+  reviewFeedback: z.array(z.string()).optional(),
+});
+
+const MAX_REVIEW_RETRIES = 2;
+const MIN_ACCEPTABLE_SCORE = 6;
+
+const reviewVideoScriptStep = createStep({
+  id: "review-video-script",
+  description: "Review video script quality and regenerate if score is below threshold",
+  inputSchema: videoScriptOutputSchema,
+  outputSchema: videoScriptOutputSchema,
+  execute: async ({ inputData }) => {
+    const reviewerAgent = mastra.getAgent("qualityReviewer");
+    const writerAgent = mastra.getAgent("scriptWriter");
+
+    const reviewMessage = `Review this social media video content:
+
+Platform: ${inputData.platform}
+Scenes: ${inputData.sceneCount}
+
+Script:
+${inputData.script}
+
+Caption:
+${inputData.caption}
+
+Narration:
+${inputData.narrationText}
+
+Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
+
+    let bestScript = inputData.script;
+    let bestCaption = inputData.caption;
+    let bestNarration = inputData.narrationText;
+    let bestSceneNarrations = inputData.sceneNarrations;
+    let bestScore = 0;
+    let bestFeedback: string[] = [];
+
+    for (let attempt = 0; attempt <= MAX_REVIEW_RETRIES; attempt++) {
+      try {
+        const reviewResponse = await reviewerAgent.generate(reviewMessage);
+        const reviewText = (reviewResponse as { text: string }).text;
+        const review = parseJsonResponse<{
+          approved?: boolean;
+          score?: number;
+          improvements?: string[];
+        }>(reviewText);
+
+        const score = review.score ?? 0;
+        const feedback = review.improvements ?? [];
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestFeedback = feedback;
+        }
+
+        if (score >= MIN_ACCEPTABLE_SCORE) {
+          break;
+        }
+
+        if (attempt < MAX_REVIEW_RETRIES) {
+          const regenSections: string[] = [
+            `Rewrite a ${inputData.sceneCount}-scene video script for ${inputData.platform} about: ${inputData.prompt}`,
+            `Language: ${inputData.language}`,
+            `Improve on these points:`,
+            ...feedback.map((f) => `- ${f}`),
+            ``,
+            `Include a "narration" field with the full voiceover text.`,
+            `Each scene in the "scenes" array must also include its own "narration" field with the voiceover text for that specific scene.`,
+            `Return ONLY valid JSON with "hook", "scenes" (array with "narration" per scene), "cta", "caption", "narration" — no markdown, no code fences, no explanation.`,
+          ];
+
+          const regenResponse = await writerAgent.generate(regenSections.join("\n"));
+          const regenText = (regenResponse as { text: string }).text;
+
+          try {
+            const parsed = parseJsonResponse<{
+              hook?: string;
+              body?: string;
+              cta?: string;
+              caption?: string;
+              narration?: string;
+              scenes?: { narration?: string }[];
+            }>(regenText);
+            bestScript = `${parsed.hook ?? ""}\n\n${parsed.body ?? ""}\n\n${parsed.cta ?? ""}`;
+            bestCaption = parsed.caption ?? bestCaption;
+            bestNarration = parsed.narration ?? bestNarration;
+
+            const parsedScenes = parsed.scenes ?? [];
+            const extracted = parsedScenes
+              .map((s) => s.narration ?? "")
+              .filter((n) => n.length > 0);
+            if (extracted.length > 0) {
+              bestSceneNarrations = extracted;
+            } else if (bestNarration) {
+              bestSceneNarrations = [bestNarration];
+            }
+          } catch {
+            bestScript = regenText;
+            bestNarration = regenText;
+            bestSceneNarrations = regenText ? [regenText] : [];
+          }
+        }
+      } catch (error) {
+        console.error(`[review-video-script] Review attempt ${attempt + 1} failed:`, error);
+        break;
+      }
+    }
+
+    if (bestScript !== inputData.script || bestCaption !== inputData.caption) {
+      await db
+        .update(contents)
+        .set({
+          script: bestScript,
+          metadata: {
+            enhancedPrompt: inputData.enhancedPrompt,
+            hasAvatar: !!inputData.avatarId,
+            platform: inputData.platform,
+            reviewScore: bestScore,
+            reviewFeedback: bestFeedback,
+          },
+        })
+        .where(eq(contents.id, inputData.contentId));
+    }
+
+    return {
+      ...inputData,
+      script: bestScript,
+      caption: bestCaption,
+      narrationText: bestNarration,
+      sceneNarrations: bestSceneNarrations,
+      reviewScore: bestScore,
+      reviewFeedback: bestFeedback,
     };
   },
 });
@@ -320,9 +514,12 @@ const generateVideoImagesStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    sceneNarrations: z.array(z.string()),
     brandKitJson: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     templateId: z.string().optional(),
+    reviewScore: z.number().optional(),
+    reviewFeedback: z.array(z.string()).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -340,6 +537,7 @@ const generateVideoImagesStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    sceneNarrations: z.array(z.string()),
     brandKitJson: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     templateId: z.string().optional(),
@@ -422,6 +620,7 @@ const generateVideoImagesStep = createStep({
       script: inputData.script,
       caption: inputData.caption,
       narrationText: inputData.narrationText,
+      sceneNarrations: inputData.sceneNarrations,
       brandKitJson: inputData.brandKitJson,
       templateInputs: inputData.templateInputs,
       templateId: inputData.templateId,
@@ -449,6 +648,7 @@ const compositeVideoSceneStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    sceneNarrations: z.array(z.string()),
     brandKitJson: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     templateId: z.string().optional(),
@@ -470,6 +670,7 @@ const compositeVideoSceneStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    sceneNarrations: z.array(z.string()),
     aspectRatio: z.string(),
   }),
   execute: async ({ inputData }) => {
@@ -591,14 +792,15 @@ const compositeVideoSceneStep = createStep({
       script: inputData.script,
       caption: inputData.caption,
       narrationText: inputData.narrationText,
+      sceneNarrations: inputData.sceneNarrations,
       aspectRatio,
     };
   },
 });
 
-const generateVideoClipsStep = createStep({
-  id: "generate-video-clips",
-  description: "Generate video clips from scene images with avatar reference",
+const generateVoiceoverStep = createStep({
+  id: "generate-voiceover",
+  description: "Generate per-scene TTS voiceover audio from scene narrations",
   inputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
@@ -615,7 +817,119 @@ const generateVideoClipsStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    sceneNarrations: z.array(z.string()),
     aspectRatio: z.string(),
+  }),
+  outputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    prompt: z.string(),
+    scenes: z.array(
+      z.object({
+        url: z.string(),
+        description: z.string(),
+        scenePrompt: z.string(),
+      }),
+    ),
+    enhancedPrompt: z.any(),
+    promptContext: z.any(),
+    script: z.string(),
+    caption: z.string(),
+    narrationText: z.string(),
+    sceneNarrations: z.array(z.string()),
+    aspectRatio: z.string(),
+    sceneAudios: z.array(z.object({ url: z.string(), durationMs: z.number() })).optional(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
+  }),
+  execute: async ({ inputData }) => {
+    const audioProvider = getProviders().audio;
+
+    if (inputData.sceneNarrations.length > 0) {
+      const sceneAudios: { url: string; durationMs: number }[] = [];
+
+      for (const narration of inputData.sceneNarrations) {
+        const audioResult = await audioProvider.generate(narration);
+        sceneAudios.push({ url: audioResult.url, durationMs: audioResult.durationMs });
+
+        await insertMediaAsset({
+          userId: inputData.userId,
+          contentId: inputData.contentId,
+          type: "audio",
+          url: audioResult.url,
+          provider: "dashscope",
+          metadata: {
+            durationMs: audioResult.durationMs,
+            source: "cosyvoice-tts",
+            scene: sceneAudios.length,
+          },
+        });
+      }
+
+      return {
+        ...inputData,
+        sceneAudios,
+        audioUrl: undefined,
+        audioDurationMs: undefined,
+      };
+    }
+
+    if (!inputData.narrationText) {
+      return {
+        ...inputData,
+        sceneAudios: undefined,
+        audioUrl: undefined,
+        audioDurationMs: undefined,
+      };
+    }
+
+    const audioResult = await audioProvider.generate(inputData.narrationText);
+
+    await insertMediaAsset({
+      userId: inputData.userId,
+      contentId: inputData.contentId,
+      type: "audio",
+      url: audioResult.url,
+      provider: "dashscope",
+      metadata: {
+        durationMs: audioResult.durationMs,
+        source: "cosyvoice-tts",
+      },
+    });
+
+    return {
+      ...inputData,
+      sceneAudios: undefined,
+      audioUrl: audioResult.url,
+      audioDurationMs: audioResult.durationMs,
+    };
+  },
+});
+
+const generateVideoClipsStep = createStep({
+  id: "generate-video-clips",
+  description: "Generate video clips from scene images with per-scene durations",
+  inputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    prompt: z.string(),
+    scenes: z.array(
+      z.object({
+        url: z.string(),
+        description: z.string(),
+        scenePrompt: z.string(),
+      }),
+    ),
+    enhancedPrompt: z.any(),
+    promptContext: z.any(),
+    script: z.string(),
+    caption: z.string(),
+    narrationText: z.string(),
+    sceneNarrations: z.array(z.string()),
+    aspectRatio: z.string(),
+    sceneAudios: z.array(z.object({ url: z.string(), durationMs: z.number() })).optional(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -624,6 +938,9 @@ const generateVideoClipsStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    sceneAudios: z.array(z.object({ url: z.string(), durationMs: z.number() })).optional(),
+    audioUrl: z.string().optional(),
+    audioDurationMs: z.number().optional(),
   }),
   execute: async ({ inputData }) => {
     const contextData = inputData.promptContext as {
@@ -631,12 +948,16 @@ const generateVideoClipsStep = createStep({
       avatarReferenceImageUrl?: string;
     };
 
+    const durations = inputData.sceneAudios
+      ? inputData.sceneAudios.map((a) => Math.ceil(a.durationMs / 1000))
+      : undefined;
+
     const videoUrls = await getProviders().video.generate(
       inputData.scenes.map((s) => ({ url: s.url, description: s.description })),
       inputData.prompt,
       contextData.avatarReferenceImageUrl,
       undefined,
-      { aspectRatio: inputData.aspectRatio },
+      { aspectRatio: inputData.aspectRatio, durations },
     );
 
     for (const videoUrl of videoUrls) {
@@ -660,73 +981,16 @@ const generateVideoClipsStep = createStep({
       script: inputData.script,
       caption: inputData.caption,
       narrationText: inputData.narrationText,
-    };
-  },
-});
-
-const generateVoiceoverStep = createStep({
-  id: "generate-voiceover",
-  description: "Generate TTS voiceover audio from the video script narration",
-  inputSchema: z.object({
-    contentId: z.string(),
-    userId: z.string(),
-    videoUrls: z.array(z.string()),
-    script: z.string(),
-    caption: z.string(),
-    narrationText: z.string(),
-  }),
-  outputSchema: z.object({
-    contentId: z.string(),
-    userId: z.string(),
-    videoUrls: z.array(z.string()),
-    script: z.string(),
-    caption: z.string(),
-    audioUrl: z.string().optional(),
-    audioDurationMs: z.number().optional(),
-  }),
-  execute: async ({ inputData }) => {
-    if (!inputData.narrationText) {
-      return {
-        contentId: inputData.contentId,
-        userId: inputData.userId,
-        videoUrls: inputData.videoUrls,
-        script: inputData.script,
-        caption: inputData.caption,
-        audioUrl: undefined,
-        audioDurationMs: undefined,
-      };
-    }
-
-    const audioProvider = getProviders().audio;
-    const audioResult = await audioProvider.generate(inputData.narrationText);
-
-    await insertMediaAsset({
-      userId: inputData.userId,
-      contentId: inputData.contentId,
-      type: "audio",
-      url: audioResult.url,
-      provider: "dashscope",
-      metadata: {
-        durationMs: audioResult.durationMs,
-        source: "cosyvoice-tts",
-      },
-    });
-
-    return {
-      contentId: inputData.contentId,
-      userId: inputData.userId,
-      videoUrls: inputData.videoUrls,
-      script: inputData.script,
-      caption: inputData.caption,
-      audioUrl: audioResult.url,
-      audioDurationMs: audioResult.durationMs,
+      sceneAudios: inputData.sceneAudios,
+      audioUrl: inputData.audioUrl,
+      audioDurationMs: inputData.audioDurationMs,
     };
   },
 });
 
 const composeVideoAudioStep = createStep({
   id: "compose-video-audio",
-  description: "Merge video clips and overlay voiceover audio",
+  description: "Merge video clips and overlay voiceover audio per-scene",
   inputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
@@ -734,6 +998,7 @@ const composeVideoAudioStep = createStep({
     script: z.string(),
     caption: z.string(),
     narrationText: z.string(),
+    sceneAudios: z.array(z.object({ url: z.string(), durationMs: z.number() })).optional(),
     audioUrl: z.string().optional(),
     audioDurationMs: z.number().optional(),
   }),
@@ -757,10 +1022,23 @@ const composeVideoAudioStep = createStep({
       };
     }
 
-    const compositedUrl = await composeVideoWithAudio(
-      inputData.videoUrls,
-      inputData.audioUrl,
-    );
+    let compositedUrl: string;
+
+    if (inputData.sceneAudios && inputData.sceneAudios.length > 0) {
+      const sceneAudioUrls = inputData.sceneAudios.map((a) => a.url);
+      compositedUrl = await composeVideoWithAudio(
+        inputData.videoUrls,
+        undefined,
+        sceneAudioUrls,
+      );
+    } else {
+      compositedUrl = await composeVideoWithAudio(
+        inputData.videoUrls,
+        inputData.audioUrl,
+      );
+    }
+
+    const finalAudioUrl = inputData.sceneAudios?.[0]?.url ?? inputData.audioUrl;
 
     await insertMediaAsset({
       userId: inputData.userId,
@@ -771,7 +1049,8 @@ const composeVideoAudioStep = createStep({
       metadata: {
         source: "video-composer",
         originalVideoCount: inputData.videoUrls.length,
-        hasAudio: !!inputData.audioUrl,
+        hasAudio: !!(finalAudioUrl),
+        perScene: !!(inputData.sceneAudios && inputData.sceneAudios.length > 0),
       },
     });
 
@@ -781,7 +1060,7 @@ const composeVideoAudioStep = createStep({
       videoUrls: [compositedUrl],
       script: inputData.script,
       caption: inputData.caption,
-      audioUrl: inputData.audioUrl,
+      audioUrl: finalAudioUrl,
     };
   },
 });
@@ -862,10 +1141,11 @@ export const generateVideoWorkflow = createWorkflow({
 })
   .then(enhanceVideoPromptStep)
   .then(generateVideoScriptStep)
+  .then(reviewVideoScriptStep)
   .then(generateVideoImagesStep)
   .then(compositeVideoSceneStep)
-  .then(generateVideoClipsStep)
   .then(generateVoiceoverStep)
+  .then(generateVideoClipsStep)
   .then(composeVideoAudioStep)
   .then(saveVideoVersionStep);
 
