@@ -1,4 +1,4 @@
-import type { ContentType, Platform } from "../types/index";
+import type { ContentType, Platform } from "../types/index.js";
 
 export type TemplateCategory =
   | "conversation"

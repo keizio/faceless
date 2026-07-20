@@ -46,6 +46,15 @@ pnpm db:migrate    # Apply pending migrations
 pnpm db:studio     # Visual DB browser
 ```
 
+### Docker Compose (API + Redis + Worker)
+```bash
+docker compose -f apps/backend/docker-compose.yml up -d   # Start all services
+docker compose -f apps/backend/docker-compose.yml logs -f # Follow logs
+docker compose -f apps/backend/docker-compose.yml down    # Stop all services
+```
+
+Services: `api` (port 3001), `worker` (BullMQ consumer), `redis` (queue broker). Requires external Postgres via `DATABASE_URL` in `.env`.
+
 ### Queue Workers
 Workers run in a separate process via `apps/backend/src/worker.ts`. In dev, run alongside the API server:
 ```bash

@@ -1,14 +1,14 @@
-import type { ContentTemplate, TemplateCategory } from "./types";
-import { fakeChatTemplate } from "./definitions/fake-chat";
-import { ugcProductMarketingTemplate } from "./definitions/ugc-product-marketing";
-import { splitScreen } from "./definitions/split-screen";
-import { aiMusicVideo } from "./definitions/ai-music-video";
-import { factCardTemplate } from "./definitions/fact-card";
-import { storytimeNarrationTemplate } from "./definitions/storytime-narration";
-import { listicleTemplate } from "./definitions/listicle";
-import { quoteCardTemplate } from "./definitions/quote-card";
-import { povTemplate } from "./definitions/pov";
-import { lofiMusicTemplate } from "./definitions/lofi-music";
+import type { ContentTemplate, TemplateCategory } from "./types.js";
+import { fakeChatTemplate } from "./definitions/fake-chat.js";
+import { ugcProductMarketingTemplate } from "./definitions/ugc-product-marketing.js";
+import { splitScreen } from "./definitions/split-screen.js";
+import { aiMusicVideo } from "./definitions/ai-music-video.js";
+import { factCardTemplate } from "./definitions/fact-card.js";
+import { storytimeNarrationTemplate } from "./definitions/storytime-narration.js";
+import { listicleTemplate } from "./definitions/listicle.js";
+import { quoteCardTemplate } from "./definitions/quote-card.js";
+import { povTemplate } from "./definitions/pov.js";
+import { lofiMusicTemplate } from "./definitions/lofi-music.js";
 
 export const ALL_TEMPLATES: ContentTemplate[] = [
   fakeChatTemplate,
@@ -52,4 +52,4 @@ export {
   lofiMusicTemplate,
 };
 
-export type { ContentTemplate, TemplateCategory, RenderMode, TemplateInputField, TemplateFieldType, TemplateItemField } from "./types";
+export type { ContentTemplate, TemplateCategory, RenderMode, TemplateInputField, TemplateFieldType, TemplateItemField } from "./types.js";

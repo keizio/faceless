@@ -1,4 +1,4 @@
-import type { ContentTemplate } from "../types";
+import type { ContentTemplate } from "../types.js";
 
 export const splitScreen: ContentTemplate = {
   id: "split-screen",
