@@ -204,7 +204,7 @@ export default function NewAvatarPage() {
                       className="min-h-[80px] resize-y text-sm"
                     />
                     <p className="mt-1 text-xs text-muted-foreground/60">
-                      This prompt will be used when generating the avatar's character sheet. Max 1000 characters.
+                      This prompt will be used when generating the avatar&apos;s character sheet. Max 1000 characters.
                     </p>
                   </div>
 

@@ -351,7 +351,7 @@ export default function AvatarDetailPage({ params }: { params: Promise<{ id: str
                             className="min-h-[70px] resize-y text-sm"
                           />
                           <p className="mt-0.5 text-[11px] text-muted-foreground/50">
-                            Used when generating the avatar's character sheet. Max 1000 characters.
+                            Used when generating the avatar&apos;s character sheet. Max 1000 characters.
                           </p>
                         </div>
                         <div className="flex justify-end gap-2 pt-1">
