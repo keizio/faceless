@@ -19,5 +19,7 @@ RUN pnpm deploy --filter @faceless/backend /app/deploy
 FROM node:22-alpine
 WORKDIR /app
 COPY --from=builder /app/deploy .
+RUN npm install -g tsx
 EXPOSE 3001
-CMD ["node", "dist/index.js"]
+ENTRYPOINT ["tsx"]
+CMD ["dist/index.js"]
