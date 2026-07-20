@@ -84,54 +84,8 @@ async function pollReplicatePrediction(
 }
 
 export class ReplicateTextProvider implements TextProvider {
-  async generate(options: GenerateTextOptions): Promise<string> {
-    const messages: Record<string, unknown>[] = [];
-    if (options.system) {
-      messages.push({ role: "system", content: options.system });
-    }
-
-    const hasImages = options.images && options.images.length > 0;
-    if (hasImages) {
-      messages.push({
-        role: "user",
-        content: [
-          { type: "text", text: options.prompt },
-          ...options.images!.map((img) => ({
-            type: "image_url",
-            image_url: { url: img.url },
-          })),
-        ],
-      });
-    } else {
-      messages.push({ role: "user", content: options.prompt });
-    }
-
-    const model = process.env.AI_TEXT_MODEL;
-    if (!model) {
-      throw new Error("AI_TEXT_MODEL not set for Replicate text provider");
-    }
-
-    const response = await fetch(`${BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: options.maxTokens ?? 8192,
-        temperature: options.temperature ?? 0.7,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Replicate text API error: ${response.status} ${errorText}`);
-    }
-
-    const data = (await response.json()) as {
-      choices?: { message?: { content: string } }[];
-    };
-
-    return data.choices?.[0]?.message?.content ?? "";
+  async generate(_options: GenerateTextOptions): Promise<string> {
+    throw new Error("Text generation is not available via Replicate. Use dashscope, openrouter, google-vertex-ai, or model-ark provider for text generation.");
   }
 }
 

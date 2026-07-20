@@ -105,6 +105,8 @@ function resolveImage(name: ProviderName): ImageProvider {
 
 function resolveVideo(name: ProviderName): VideoProvider {
   switch (name) {
+    case "dashscope":
+      return new DashScopeVideoProvider();
     case "google-ai-studio":
       return new GoogleAIStudioVideoProvider();
     case "google-vertex-ai":
@@ -115,13 +117,19 @@ function resolveVideo(name: ProviderName): VideoProvider {
       return new ReplicateVideoProvider();
     case "local":
       return new LocalVideoProvider();
+    case "openrouter":
+      throw new Error("OpenRouter does not support video generation. Use dashscope, google-vertex-ai, model-ark, replicate, or local provider for video.");
+    case "elevenlabs":
+      throw new Error("ElevenLabs does not support video generation. Use dashscope, google-vertex-ai, model-ark, replicate, or local provider for video.");
     default:
-      return new DashScopeVideoProvider();
+      throw new Error(`Unknown video provider: ${name}`);
   }
 }
 
 function resolveAudio(name: ProviderName): AudioProvider {
   switch (name) {
+    case "dashscope":
+      return new DashScopeAudioProvider();
     case "elevenlabs":
       return new ElevenLabsAudioProvider();
     case "google-ai-studio":
@@ -134,13 +142,17 @@ function resolveAudio(name: ProviderName): AudioProvider {
       return new ReplicateAudioProvider();
     case "local":
       return new LocalAudioProvider();
+    case "openrouter":
+      throw new Error("OpenRouter does not support audio generation. Use dashscope, elevenlabs, google-vertex-ai, model-ark, replicate, or local provider for audio.");
     default:
-      return new DashScopeAudioProvider();
+      throw new Error(`Unknown audio provider: ${name}`);
   }
 }
 
 function resolveMusic(name: ProviderName): MusicProvider {
   switch (name) {
+    case "dashscope":
+      return new DashScopeMusicProvider();
     case "google-ai-studio":
       return new GoogleAIStudioMusicProvider();
     case "google-vertex-ai":
@@ -151,18 +163,51 @@ function resolveMusic(name: ProviderName): MusicProvider {
       return new ReplicateMusicProvider();
     case "local":
       return new LocalMusicProvider();
+    case "openrouter":
+      throw new Error("OpenRouter does not support music generation. Use dashscope, google-vertex-ai, model-ark, replicate, or local provider for music.");
+    case "elevenlabs":
+      throw new Error("ElevenLabs does not support music generation. Use dashscope, google-vertex-ai, model-ark, replicate, or local provider for music.");
     default:
-      return new DashScopeMusicProvider();
+      throw new Error(`Unknown music provider: ${name}`);
+  }
+}
+
+function validateProviderCapability(provider: ProviderName, capability: string): void {
+  const unsupported: Record<string, ProviderName[]> = {
+    video: ["openrouter", "elevenlabs"],
+    audio: ["openrouter"],
+    music: ["openrouter", "elevenlabs"],
+    text: ["elevenlabs"],
+  };
+
+  const blocked = unsupported[capability];
+  if (blocked?.includes(provider)) {
+    throw new Error(
+      `Provider "${provider}" does not support ${capability} generation. ` +
+      `Please set AI_${capability.toUpperCase()}_PROVIDER to a supported value.`,
+    );
   }
 }
 
 function createProviders(): Providers {
+  const textProvider = getEnvVar("TEXT");
+  const imageProvider = getEnvVar("IMAGE");
+  const videoProvider = getEnvVar("VIDEO");
+  const audioProvider = getEnvVar("AUDIO");
+  const musicProvider = getEnvVar("MUSIC");
+
+  validateProviderCapability(textProvider, "text");
+  validateProviderCapability(imageProvider, "image");
+  validateProviderCapability(videoProvider, "video");
+  validateProviderCapability(audioProvider, "audio");
+  validateProviderCapability(musicProvider, "music");
+
   return {
-    text: resolveText(getEnvVar("TEXT")),
-    image: resolveImage(getEnvVar("IMAGE")),
-    video: resolveVideo(getEnvVar("VIDEO")),
-    audio: resolveAudio(getEnvVar("AUDIO")),
-    music: resolveMusic(getEnvVar("MUSIC")),
+    text: resolveText(textProvider),
+    image: resolveImage(imageProvider),
+    video: resolveVideo(videoProvider),
+    audio: resolveAudio(audioProvider),
+    music: resolveMusic(musicProvider),
   };
 }
 

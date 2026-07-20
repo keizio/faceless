@@ -71,6 +71,7 @@ export interface FabricCanvasHandle {
   bringToFront: (layerId: string) => void;
   sendToBack: (layerId: string) => void;
   serializeObject: (layerId: string) => { type: "text" | "shape"; layer: TextLayer | ShapeLayer } | null;
+  getLayersFromCanvas: () => { textLayers: TextLayer[]; shapeLayers: ShapeLayer[] };
 }
 
 export interface ContextMenuData {
@@ -165,6 +166,7 @@ export const FabricCanvas = memo(
     const isInitializingRef = useRef(false);
     const bgImageUrlRef = useRef("");
     const exportResolveRef = useRef<(() => void) | null>(null);
+    const disposedRef = useRef(false);
     const propsRef = useRef({
       backgroundImage,
       width,
@@ -197,81 +199,8 @@ export const FabricCanvas = memo(
 
     const [canvasReady, setCanvasReady] = useState(false);
 
-    const setTextLayers = useCanvasEditorStore((s) => s.setTextLayers);
     const setSelectedLayer = useCanvasEditorStore((s) => s.setSelectedLayer);
     const selectedLayerId = useCanvasEditorStore((s) => s.selectedLayerId);
-    const addShapeLayerToStore = useCanvasEditorStore((s) => s.addShapeLayer);
-    const updateShapeLayerInStore = useCanvasEditorStore((s) => s.updateShapeLayer);
-
-    const syncLayersToStore = useCallback(() => {
-      const canvas = fabricRef.current;
-      if (!canvas || isSyncingRef.current) return;
-
-      isSyncingRef.current = true;
-      const updatedTextLayers: TextLayer[] = [];
-      const updatedShapeLayers: ShapeLayer[] = [];
-      const sk = propsRef.current.slideKey;
-
-      canvas.getObjects().forEach((obj) => {
-        const data = getObjData(obj);
-        const o = asObj(obj);
-        if (data?.isTextLayer && data?.layerData) {
-          updatedTextLayers.push({
-            ...(data.layerData as TextLayer),
-            x: o.left ?? 0,
-            y: o.top ?? 0,
-            angle: o.angle ?? 0,
-            width: (o.width ?? 200) * (o.scaleX ?? 1),
-            opacity: o.opacity ?? 1,
-            visible: o.visible ?? true,
-            originX: (o.originX ?? "center") as "center" | "left" | "right",
-            originY: (o.originY ?? "center") as "center" | "top" | "bottom",
-          });
-        }
-        if (data?.isShapeLayer && data?.layerData) {
-          updatedShapeLayers.push({
-            ...(data.layerData as ShapeLayer),
-            x: o.left ?? 0,
-            y: o.top ?? 0,
-            width: (o.width ?? 200) * (o.scaleX ?? 1),
-            height: (o.height ?? 200) * (o.scaleY ?? 1),
-            angle: o.angle ?? 0,
-            opacity: o.opacity ?? 1,
-            visible: o.visible ?? true,
-            fill: (o.fill as string) ?? "transparent",
-            stroke: (o.stroke as string) ?? "#ffffff",
-            strokeWidth: (o.strokeWidth as number) ?? 2,
-          });
-        }
-      });
-
-      setTextLayers(sk, updatedTextLayers);
-      const currentShapeLayers = useCanvasEditorStore.getState().shapeLayers[sk] || [];
-      const existingIds = new Set(updatedShapeLayers.map((l) => l.id));
-      const newIds = new Set(currentShapeLayers.map((l) => l.id));
-      for (const sl of updatedShapeLayers) {
-        if (newIds.has(sl.id)) {
-          updateShapeLayerInStore(sk, sl.id, sl);
-        } else {
-          addShapeLayerToStore(sk, sl);
-        }
-      }
-      for (const sl of currentShapeLayers) {
-        if (!existingIds.has(sl.id)) {
-          useCanvasEditorStore.getState().removeShapeLayer(sk, sl.id);
-        }
-      }
-
-      isSyncingRef.current = false;
-    }, [setTextLayers, addShapeLayerToStore, updateShapeLayerInStore]);
-
-    const debouncedSync = useCallback(() => {
-      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-      syncTimerRef.current = setTimeout(() => {
-        syncLayersToStore();
-        syncTimerRef.current = null;
-      }, 300);
-    }, [syncLayersToStore]);
 
     const saveUndoState = useCallback(() => {
       const canvas = fabricRef.current;
@@ -301,6 +230,8 @@ export const FabricCanvas = memo(
             visible: layer.visible,
             selectable: !layer.locked,
             evented: !layer.locked,
+            hasControls: !layer.locked,
+            hasBorders: !layer.locked,
             width: layer.width,
             underline: layer.underline ?? false,
             linethrough: layer.linethrough ?? false,
@@ -339,6 +270,10 @@ export const FabricCanvas = memo(
               ry: layer.rx ?? 0,
               opacity: layer.opacity,
               angle: layer.angle,
+              selectable: !layer.locked,
+              evented: !layer.locked,
+              hasControls: !layer.locked,
+              hasBorders: !layer.locked,
             });
           } else if (layer.type === "circle") {
             fabricObj = new fabricMod.Ellipse({
@@ -351,11 +286,22 @@ export const FabricCanvas = memo(
               strokeWidth: layer.strokeWidth,
               opacity: layer.opacity,
               angle: layer.angle,
+              selectable: !layer.locked,
+              evented: !layer.locked,
+              hasControls: !layer.locked,
+              hasBorders: !layer.locked,
             });
           } else if (layer.type === "line") {
             fabricObj = new fabricMod.Line(
               [layer.x, layer.y, layer.x2 ?? layer.x + layer.width, layer.y2 ?? layer.y],
-              { stroke: layer.stroke, strokeWidth: Math.max(layer.strokeWidth, 2) },
+              { 
+                stroke: layer.stroke, 
+                strokeWidth: Math.max(layer.strokeWidth, 2),
+                selectable: !layer.locked,
+                evented: !layer.locked,
+                hasControls: !layer.locked,
+                hasBorders: !layer.locked,
+              },
             );
           } else if (layer.type === "arrow") {
             const x1 = layer.x;
@@ -379,8 +325,13 @@ export const FabricCanvas = memo(
             fabricObj = new fabricMod.Group([line, triangle], {
               left: x1,
               top: y1 - headSize / 2,
+              selectable: !layer.locked,
+              evented: !layer.locked,
+              hasControls: !layer.locked,
+              hasBorders: !layer.locked,
             });
           }
+
           if (fabricObj) {
             const fObj = fabricObj as FabricObjWithData;
             fObj.data = {
@@ -462,7 +413,12 @@ export const FabricCanvas = memo(
           canvas.getObjects().forEach((obj) => {
             const data = getObjData(obj);
             if (data?.isTextLayer || data?.isShapeLayer) {
-              obj.set({ selectable: true, evented: true } as Record<string, unknown>);
+              obj.set({ 
+                selectable: true, 
+                evented: true,
+                hasControls: true,
+                hasBorders: true,
+              } as Record<string, unknown>);
             }
           });
         } else {
@@ -475,7 +431,12 @@ export const FabricCanvas = memo(
             if (data?.isTextLayer || data?.isShapeLayer) {
               const layerData = data.layerData as TextLayer | ShapeLayer;
               const locked = "locked" in layerData ? layerData.locked : false;
-              obj.set({ selectable: !locked, evented: !locked } as Record<string, unknown>);
+              obj.set({ 
+                selectable: !locked, 
+                evented: !locked,
+                hasControls: !locked,
+                hasBorders: !locked,
+              } as Record<string, unknown>);
             }
           });
         }
@@ -489,7 +450,9 @@ export const FabricCanvas = memo(
       if (url === bgImageUrlRef.current) return;
       bgImageUrlRef.current = url;
       try {
-        const img = await fabricMod.FabricImage.fromURL(url);
+        const img = await fabricMod.FabricImage.fromURL(url, {
+          crossOrigin: "anonymous",
+        });
         const cw = propsRef.current.width;
         const ch = propsRef.current.height;
         const scaleX = cw / (img.width ?? cw);
@@ -565,7 +528,6 @@ export const FabricCanvas = memo(
 
         canvas.on("object:modified", () => {
           saveUndoState();
-          debouncedSync();
         });
 
         canvas.on("object:added", (e: { target?: unknown }) => {
@@ -581,7 +543,6 @@ export const FabricCanvas = memo(
               if (data.layerData) {
                 (data.layerData as TextLayer).text = o.text ?? "";
               }
-              debouncedSync();
             });
           }
         });
@@ -631,6 +592,10 @@ export const FabricCanvas = memo(
                 strokeWidth: sw,
                 rx: 0,
                 ry: 0,
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                hasBorders: true,
               });
             } else if (shapeType === "circle") {
               fabricObj = new fabricMod.Ellipse({
@@ -641,11 +606,22 @@ export const FabricCanvas = memo(
                 fill,
                 stroke,
                 strokeWidth: sw,
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                hasBorders: true,
               });
             } else if (shapeType === "line") {
               fabricObj = new fabricMod.Line(
                 [pointer.x - 100, pointer.y, pointer.x + 100, pointer.y],
-                { stroke, strokeWidth: Math.max(sw, 2) },
+                { 
+                  stroke, 
+                  strokeWidth: Math.max(sw, 2),
+                  selectable: true,
+                  evented: true,
+                  hasControls: true,
+                  hasBorders: true,
+                },
               );
             } else if (shapeType === "arrow") {
               const x1 = pointer.x - 100;
@@ -669,6 +645,10 @@ export const FabricCanvas = memo(
               fabricObj = new fabricMod.Group([line, triangle], {
                 left: x1,
                 top: y1 - headSize / 2,
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                hasBorders: true,
               });
             }
 
@@ -720,6 +700,7 @@ export const FabricCanvas = memo(
         const bgUrl = propsRef.current.backgroundImage;
         if (bgUrl) {
           await loadBackgroundImage(canvas, fabricMod, bgUrl);
+          if (disposed) return;
         }
         renderLayersOnCanvas(canvas, propsRef.current.layers, fabricMod);
         renderShapeLayersOnCanvas(canvas, propsRef.current.shapeLayers, fabricMod);
@@ -734,6 +715,7 @@ export const FabricCanvas = memo(
 
       return () => {
         disposed = true;
+        disposedRef.current = true;
         isReadyRef.current = false;
         fabricRef.current?.dispose();
         fabricRef.current = null;
@@ -755,6 +737,7 @@ export const FabricCanvas = memo(
       isInitializingRef.current = true;
 
       const renderSlide = async () => {
+        if (disposedRef.current) return;
         const canvas = fabricRef.current!;
         const fabricMod = fabricModRef.current!;
 
@@ -766,14 +749,14 @@ export const FabricCanvas = memo(
         if (bgUrl) {
           await loadBackgroundImage(canvas, fabricMod, bgUrl);
 
-          if (version !== renderVersionRef.current) {
+          if (disposedRef.current || version !== renderVersionRef.current) {
             isRenderingRef.current = false;
             isInitializingRef.current = false;
             return;
           }
         }
 
-        if (version !== renderVersionRef.current) {
+        if (disposedRef.current || version !== renderVersionRef.current) {
           isRenderingRef.current = false;
           isInitializingRef.current = false;
           return;
@@ -880,6 +863,8 @@ export const FabricCanvas = memo(
           visible: layer.visible,
           selectable: !layer.locked,
           evented: !layer.locked,
+          hasControls: !layer.locked,
+          hasBorders: !layer.locked,
           width: layer.width,
           underline: layer.underline ?? false,
           linethrough: layer.linethrough ?? false,
@@ -917,6 +902,10 @@ export const FabricCanvas = memo(
             ry: layer.rx ?? 0,
             opacity: layer.opacity,
             angle: layer.angle,
+            selectable: !layer.locked,
+            evented: !layer.locked,
+            hasControls: !layer.locked,
+            hasBorders: !layer.locked,
           });
         } else if (layer.type === "circle") {
           fabricObj = new fabricMod.Ellipse({
@@ -929,11 +918,22 @@ export const FabricCanvas = memo(
             strokeWidth: layer.strokeWidth,
             opacity: layer.opacity,
             angle: layer.angle,
+            selectable: !layer.locked,
+            evented: !layer.locked,
+            hasControls: !layer.locked,
+            hasBorders: !layer.locked,
           });
         } else if (layer.type === "line") {
           fabricObj = new fabricMod.Line(
             [layer.x, layer.y, layer.x2 ?? layer.x + layer.width, layer.y2 ?? layer.y],
-            { stroke: layer.stroke, strokeWidth: Math.max(layer.strokeWidth, 2) },
+            { 
+              stroke: layer.stroke, 
+              strokeWidth: Math.max(layer.strokeWidth, 2),
+              selectable: !layer.locked,
+              evented: !layer.locked,
+              hasControls: !layer.locked,
+              hasBorders: !layer.locked,
+            },
           );
         } else if (layer.type === "arrow") {
           const x1 = layer.x;
@@ -957,6 +957,10 @@ export const FabricCanvas = memo(
           fabricObj = new fabricMod.Group([line, triangle], {
             left: x1,
             top: y1 - headSize / 2,
+            selectable: !layer.locked,
+            evented: !layer.locked,
+            hasControls: !layer.locked,
+            hasBorders: !layer.locked,
           });
         }
 
@@ -997,7 +1001,12 @@ export const FabricCanvas = memo(
         if (updates.opacity !== undefined) o.set({ opacity: updates.opacity });
         if (updates.visible !== undefined) o.set({ visible: updates.visible });
         if (updates.locked !== undefined) {
-          o.set({ selectable: !updates.locked, evented: !updates.locked });
+          o.set({ 
+            selectable: !updates.locked, 
+            evented: !updates.locked,
+            hasControls: !updates.locked,
+            hasBorders: !updates.locked,
+          });
         }
         if (updates.text !== undefined) {
           o.text = updates.text;
@@ -1029,7 +1038,12 @@ export const FabricCanvas = memo(
         if (updates.opacity !== undefined) o.set({ opacity: updates.opacity });
         if (updates.visible !== undefined) o.set({ visible: updates.visible });
         if (updates.locked !== undefined) {
-          o.set({ selectable: !updates.locked, evented: !updates.locked });
+          o.set({ 
+            selectable: !updates.locked, 
+            evented: !updates.locked,
+            hasControls: !updates.locked,
+            hasBorders: !updates.locked,
+          });
         }
         if (data.layerData) {
           data.layerData = { ...data.layerData, ...updates };
@@ -1148,7 +1162,6 @@ export const FabricCanvas = memo(
               objectMapRef.current.set(data.layerId, obj);
             }
           });
-          syncLayersToStore();
           isUndoRedoRef.current = false;
         });
       },
@@ -1168,7 +1181,6 @@ export const FabricCanvas = memo(
               objectMapRef.current.set(data.layerId, obj);
             }
           });
-          syncLayersToStore();
           isUndoRedoRef.current = false;
         });
       },
@@ -1244,6 +1256,48 @@ export const FabricCanvas = memo(
           return { type: "shape" as const, layer: layerData };
         }
         return null;
+      },
+      getLayersFromCanvas: () => {
+        const canvas = fabricRef.current;
+        if (!canvas) return { textLayers: [], shapeLayers: [] };
+        
+        const textLayers: TextLayer[] = [];
+        const shapeLayers: ShapeLayer[] = [];
+        
+        canvas.getObjects().forEach((obj) => {
+          const data = getObjData(obj);
+          const o = asObj(obj);
+          if (data?.isTextLayer && data?.layerData) {
+            textLayers.push({
+              ...(data.layerData as TextLayer),
+              x: o.left ?? 0,
+              y: o.top ?? 0,
+              angle: o.angle ?? 0,
+              width: (o.width ?? 200) * (o.scaleX ?? 1),
+              opacity: o.opacity ?? 1,
+              visible: o.visible ?? true,
+              originX: (o.originX ?? "center") as "center" | "left" | "right",
+              originY: (o.originY ?? "center") as "center" | "top" | "bottom",
+            });
+          }
+          if (data?.isShapeLayer && data?.layerData) {
+            shapeLayers.push({
+              ...(data.layerData as ShapeLayer),
+              x: o.left ?? 0,
+              y: o.top ?? 0,
+              width: (o.width ?? 200) * (o.scaleX ?? 1),
+              height: (o.height ?? 200) * (o.scaleY ?? 1),
+              angle: o.angle ?? 0,
+              opacity: o.opacity ?? 1,
+              visible: o.visible ?? true,
+              fill: (o.fill as string) ?? "transparent",
+              stroke: (o.stroke as string) ?? "#ffffff",
+              strokeWidth: (o.strokeWidth as number) ?? 2,
+            });
+          }
+        });
+        
+        return { textLayers, shapeLayers };
       },
     }));
 

@@ -145,11 +145,11 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
   const slideKey = `slide-${activeSlideIndex}`;
   const canvasLayers = useMemo(
-    () => (savedTextLayers?.textLayers[slideKey] ?? []) as TextLayer[],
+    () => (savedTextLayers?.textLayers?.[slideKey] ?? []) as TextLayer[],
     [savedTextLayers, slideKey],
   );
   const canvasShapeLayers = useMemo(
-    () => (savedTextLayers?.shapeLayers[slideKey] ?? []) as ShapeLayer[],
+    () => (savedTextLayers?.shapeLayers?.[slideKey] ?? []) as ShapeLayer[],
     [savedTextLayers, slideKey],
   );
   const backgroundImage = slideImages[activeSlideIndex] || slideImages[0] || "";
@@ -509,23 +509,25 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
     setIsExporting(true);
     try {
-      const currentTextLayers = useCanvasEditorStore.getState().textLayers;
+      // Get current state from canvas
+      const { textLayers: currentTextLayers, shapeLayers: currentShapeLayers } = 
+        canvasRef.current.getLayersFromCanvas();
+      
       const currentIsDirty = useCanvasEditorStore.getState().isDirty;
 
       if (currentIsDirty && versionId) {
-        const currentShapeLayers = useCanvasEditorStore.getState().shapeLayers;
-        const hasShapeLayers = Object.values(currentShapeLayers).some((layers) => layers.length > 0);
+        const hasShapeLayers = currentShapeLayers.length > 0;
         await saveMutation.mutateAsync({
           versionId,
-          textLayers: currentTextLayers,
-          ...(hasShapeLayers ? { shapeLayers: currentShapeLayers } : {}),
+          textLayers: { [slideKey]: currentTextLayers },
+          ...(hasShapeLayers ? { shapeLayers: { [slideKey]: currentShapeLayers } } : {}),
         });
       }
 
       const imageUrls: string[] = [];
 
       for (let i = 0; i < slideCount; i++) {
-        setActiveSlide(i);
+        if (i > 0) setActiveSlide(i);
 
         const blob = await canvasRef.current.exportAsBlob();
         if (!blob) {
@@ -537,22 +539,22 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
         const { data } = await (
           await import("@/lib/api")
-        ).api.post("/api/upload/image", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        ).api.post("/api/upload/image", formData);
 
         imageUrls.push(data.url);
       }
 
       setActiveSlide(0);
 
-      const finalTextLayers = useCanvasEditorStore.getState().textLayers;
-      const finalShapeLayers = useCanvasEditorStore.getState().shapeLayers;
-      const hasFinalShapeLayers = Object.values(finalShapeLayers).some((layers) => layers.length > 0);
+      // Get final state from canvas for export
+      const { textLayers: finalTextLayers, shapeLayers: finalShapeLayers } = 
+        canvasRef.current.getLayersFromCanvas();
+      
+      const hasFinalShapeLayers = finalShapeLayers.length > 0;
       await exportMutation.mutateAsync({
         imageUrls,
-        textLayers: finalTextLayers,
-        ...(hasFinalShapeLayers ? { shapeLayers: finalShapeLayers } : {}),
+        textLayers: { [slideKey]: finalTextLayers },
+        ...(hasFinalShapeLayers ? { shapeLayers: { [slideKey]: finalShapeLayers } } : {}),
       });
 
       toast.success("Export complete! New version created.");
@@ -566,6 +568,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     isExporting,
     versionId,
     slideCount,
+    slideKey,
     saveMutation,
     exportMutation,
     router,
@@ -742,6 +745,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             <div className="w-64 border-l border-border/50 flex flex-col">
               <div className="relative">
                 <LayerPanel
+                  canvasRef={canvasRef}
                   onAddLayer={handleAddLayer}
                   onToggleVisibility={handleToggleVisibility}
                   onToggleLock={handleToggleLock}
@@ -758,7 +762,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
                         handleAddTextLayer();
                         setShowAddLayerDropdown(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
+                      className="flex w-full text-primary items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
                     >
                       Add Text Layer
                     </button>
@@ -767,7 +771,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
                         handleAddShapeLayer();
                         setShowAddLayerDropdown(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
+                      className="flex w-full text-primary items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
                     >
                       Add Shape Layer
                     </button>

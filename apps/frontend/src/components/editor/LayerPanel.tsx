@@ -5,8 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Plus, Eye, EyeOff, Lock, Unlock, Trash2, Square, Circle, Minus, ArrowUpRight, Type } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ShapeType } from "@faceless/shared";
+import type { FabricCanvasHandle } from "./FabricCanvas";
+import type { RefObject } from "react";
 
 interface LayerPanelProps {
+  canvasRef: RefObject<FabricCanvasHandle | null>;
   onAddLayer: () => void;
   onToggleVisibility: (layerId: string, visible: boolean) => void;
   onToggleLock: (layerId: string, locked: boolean) => void;
@@ -29,20 +32,23 @@ const shapeLabels: Record<ShapeType, string> = {
 };
 
 export function LayerPanel({
+  canvasRef,
   onAddLayer,
   onToggleVisibility,
   onToggleLock,
   onRemoveLayer,
   onSelectLayer,
 }: LayerPanelProps) {
-  const textLayers = useCanvasEditorStore((s) => s.textLayers);
-  const shapeLayers = useCanvasEditorStore((s) => s.shapeLayers);
   const activeSlideIndex = useCanvasEditorStore((s) => s.activeSlideIndex);
   const selectedLayerId = useCanvasEditorStore((s) => s.selectedLayerId);
 
+  // Read layers directly from canvas
+  const { textLayers: allTextLayers, shapeLayers: allShapeLayers } = 
+    canvasRef.current?.getLayersFromCanvas() ?? { textLayers: [], shapeLayers: [] };
+  
   const slideKey = `slide-${activeSlideIndex}`;
-  const tLayers = textLayers[slideKey] || [];
-  const sLayers = shapeLayers[slideKey] || [];
+  const tLayers = allTextLayers;
+  const sLayers = allShapeLayers;
   const totalCount = tLayers.length + sLayers.length;
 
   return (

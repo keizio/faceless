@@ -72,6 +72,7 @@ export const TEMPLATE_MULTIPLIERS: Record<string, number> = {
   'listicle': 1.5,
   'storytime-narration': 1.5,
   'ai-music-video': 1.5,
+  'lofi-music': 1.5,
 };
 
 export const CONTENT_LIMITS = {

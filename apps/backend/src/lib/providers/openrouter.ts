@@ -115,7 +115,4 @@ export class OpenRouterImageProvider implements ImageProvider {
   }
 }
 
-// OpenRouter does not currently offer image-to-video generation.
-// Video generation falls back to DashScope. This class is kept for
-// future OpenRouter video API support.
-export { DashScopeVideoProvider as OpenRouterVideoProvider } from "./dashscope.js";
+

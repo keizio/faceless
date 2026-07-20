@@ -8,6 +8,7 @@ import { storytimeNarrationTemplate } from "./definitions/storytime-narration";
 import { listicleTemplate } from "./definitions/listicle";
 import { quoteCardTemplate } from "./definitions/quote-card";
 import { povTemplate } from "./definitions/pov";
+import { lofiMusicTemplate } from "./definitions/lofi-music";
 
 export const ALL_TEMPLATES: ContentTemplate[] = [
   fakeChatTemplate,
@@ -19,6 +20,7 @@ export const ALL_TEMPLATES: ContentTemplate[] = [
   listicleTemplate,
   quoteCardTemplate,
   povTemplate,
+  lofiMusicTemplate,
 ];
 
 export function getTemplateById(id: string): ContentTemplate | undefined {
@@ -47,6 +49,7 @@ export {
   listicleTemplate,
   quoteCardTemplate,
   povTemplate,
+  lofiMusicTemplate,
 };
 
 export type { ContentTemplate, TemplateCategory, RenderMode, TemplateInputField, TemplateFieldType, TemplateItemField } from "./types";

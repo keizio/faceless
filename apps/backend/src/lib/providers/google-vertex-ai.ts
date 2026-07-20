@@ -133,11 +133,11 @@ async function submitVertexTask(
 
 async function pollVertexOperation(operationName: string): Promise<Record<string, unknown>> {
   const startTime = Date.now();
-  const token = await getAccessToken();
+  let token = await getAccessToken();
 
   while (Date.now() - startTime < MAX_POLL_TIME) {
     const response = await fetch(
-      `https://${DEFAULT_LOCATION}-aiplatform.googleapis.com/v1/${operationName}`,
+      `https://${getLocation()}-aiplatform.googleapis.com/v1/${operationName}`,
       { headers: authHeadersWithToken(token) },
     );
 
@@ -160,7 +160,7 @@ async function pollVertexOperation(operationName: string): Promise<Record<string
       throw new Error(`Vertex AI operation failed: ${result.error.message}`);
     }
 
-    const newToken = await getAccessToken();
+    token = await getAccessToken();
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
   }
 
@@ -284,11 +284,26 @@ export class GoogleVertexImageProvider implements ImageProvider {
   }
 
   async inpaint(imageUrl: string, maskUrl: string, prompt?: string): Promise<string> {
+    const [imageResponse, maskResponse] = await Promise.all([
+      fetch(imageUrl),
+      fetch(maskUrl),
+    ]);
+
+    if (!imageResponse.ok) {
+      throw new Error(`Failed to download image for inpainting: ${imageResponse.status}`);
+    }
+    if (!maskResponse.ok) {
+      throw new Error(`Failed to download mask for inpainting: ${maskResponse.status}`);
+    }
+
+    const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+    const maskBuffer = Buffer.from(await maskResponse.arrayBuffer());
+
     const body = {
       instances: [{
         prompt: prompt ?? "Fill the masked area naturally",
-        image: { bytesBase64Encoded: imageUrl },
-        mask: { bytesBase64Encoded: maskUrl },
+        image: { bytesBase64Encoded: imageBuffer.toString("base64") },
+        mask: { bytesBase64Encoded: maskBuffer.toString("base64") },
       }],
       parameters: { sampleCount: 1 },
     };
@@ -341,7 +356,7 @@ export class GoogleVertexVideoProvider implements VideoProvider {
         parameters: {
           sampleCount: 1,
           durationSeconds: _options?.durations?.[i] ?? 5,
-          aspectRatio: _options?.aspectRatio?.replace(":", ":") ?? "9:16",
+          aspectRatio: _options?.aspectRatio ?? "9:16",
         },
       };
 

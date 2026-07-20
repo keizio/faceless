@@ -118,3 +118,34 @@ async function composePerScene(
   const buffer = readFileSync(outputFile);
   return await uploadFile(buffer, randomFilename("mp4"), "video/mp4");
 }
+
+export async function loopVideoWithAudio(
+  videoUrl: string,
+  audioUrl: string,
+  targetDurationSeconds: number,
+): Promise<string> {
+  const workDir = join(tmpdir(), `video-loop-${randomUUID()}`);
+  const outputFile = join(workDir, `output-${randomUUID()}.mp4`);
+
+  try {
+    execSync(`mkdir -p "${workDir}"`, { stdio: "ignore" });
+
+    const videoPath = join(workDir, "video.mp4");
+    const audioPath = join(workDir, "audio.mp3");
+
+    execSync(`curl -sL "${videoUrl}" -o "${videoPath}"`, { stdio: "ignore" });
+    execSync(`curl -sL "${audioUrl}" -o "${audioPath}"`, { stdio: "ignore" });
+
+    execSync(
+      `ffmpeg -y -stream_loop -1 -i "${videoPath}" -stream_loop -1 -i "${audioPath}" -c:v libx264 -preset fast -c:a aac -t ${targetDurationSeconds} -map 0:v:0 -map 1:a:0 "${outputFile}"`,
+      { stdio: "ignore", timeout: 600_000 },
+    );
+
+    const buffer = readFileSync(outputFile);
+    return await uploadFile(buffer, randomFilename("mp4"), "video/mp4");
+  } finally {
+    try {
+      execSync(`rm -rf "${workDir}"`, { stdio: "ignore" });
+    } catch {}
+  }
+}

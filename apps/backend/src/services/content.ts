@@ -304,6 +304,7 @@ export class ContentService {
       }
     }
 
+    await db.delete(mediaAssets).where(eq(mediaAssets.contentId, contentId));
     await db.delete(contents).where(eq(contents.id, contentId));
   }
 

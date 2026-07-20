@@ -37,6 +37,8 @@ export function buildTemplatePrompt(
       return buildAiMusicVideoPrompts(inputs, artStyle);
     case "pov":
       return buildPovPrompts(inputs, artStyle);
+    case "lofi-music":
+      return buildLoFiMusicPrompts(inputs, artStyle);
     default:
       return null;
   }
@@ -451,5 +453,72 @@ RULES:
     ],
     narrationGuidance: "No narration needed — this is a music video. Focus on visual storytelling through imagery and movement.",
     artStyle: mappedStyle ?? undefined,
+  };
+}
+
+function buildLoFiMusicPrompts(inputs: Record<string, unknown>, _artStyle?: ArtStyle): TemplatePrompts {
+  const moodOrGenre = inputs.moodOrGenre as string ?? "chill lo-fi hip hop beats";
+  const visualStyle = inputs.visualStyle as string ?? "anime-room";
+  const sceneDescription = inputs.sceneDescription as string | undefined;
+
+  const styleMap: Record<string, { visual: string; scene: string }> = {
+    "anime-room": {
+      visual: "Cozy anime-style room interior, warm desk lamp glow, rain on window, night cityscape view through window, plants, bookshelf",
+      scene: "A cozy anime-style room at night. Warm lamplight on a wooden desk. Rain trickling down the window. A soft bed, plants, and bookshelves creating a comfortable atmosphere. City lights visible through the rain-streaked window.",
+    },
+    abstract: {
+      visual: "Abstract geometric shapes, floating particles, soft color gradients, calm ambient motion, bokeh effects",
+      scene: "Gentle floating geometric shapes and particles in soft pastel colors. Smooth gradients and bokeh light effects creating a calm, dreamy atmosphere. Subtle motion throughout.",
+    },
+    nature: {
+      visual: "Gentle rain on leaves, forest stream, soft sunlight through trees, misty mountains, calm ocean waves",
+      scene: "A peaceful nature scene with gentle rain falling on lush green leaves. Soft mist and warm sunlight filtering through trees. A calm stream flowing over smooth stones.",
+    },
+    "city-night": {
+      visual: "Neon-lit cityscape at night, rainy streets with reflections, glowing signs, distant skyscrapers, street lamps",
+      scene: "A rainy city street at night. Neon signs reflecting off wet pavement. Distant skyscraper lights glowing through the mist. Warm street lamps illuminating the scene.",
+    },
+    cafe: {
+      visual: "Cozy cafe interior, warm amber lighting, wooden tables, plants, steam rising from coffee, window view",
+      scene: "A warm cozy cafe interior. Soft amber lighting, wooden tables and chairs. Potted plants and hanging lights. Steam gently rising from a cup of coffee. Rain visible through the cafe window.",
+    },
+  };
+
+  const chosen = styleMap[visualStyle] ?? styleMap["anime-room"];
+
+  const sceneGuidance = sceneDescription
+    ? `Custom scene description: ${sceneDescription}`
+    : `Scene: ${chosen.scene}`;
+
+  return {
+    systemPrompt: `You are creating a lo-fi music video scene. The scene is a single, looping, atmospheric visual that captures a cozy, relaxing mood.
+
+Music mood: ${moodOrGenre}
+Visual style: ${chosen.visual}
+
+RULES:
+- Single continuous scene, no cuts or transitions
+- Focus on atmosphere, lighting, and mood
+- Create a scene that feels warm, cozy, and relaxing
+- Include subtle details that reward repeated viewing (since this will loop)
+- No human figures, no faces, no text
+- The scene should feel like it could loop seamlessly
+- Warm lighting, soft colors, gentle atmosphere`,
+    visualGuidance: `${chosen.visual}. ${sceneGuidance}`,
+    negativeAdditions: [
+      "static",
+      "boring",
+      "text",
+      "words",
+      "low energy",
+      "corporate",
+      "human faces",
+      "people",
+      "crowds",
+      "bright harsh lighting",
+      "cold colors",
+    ],
+    narrationGuidance: "No narration needed — this is a lo-fi music video. The visual loops with the music.",
+    artStyle: "anime",
   };
 }

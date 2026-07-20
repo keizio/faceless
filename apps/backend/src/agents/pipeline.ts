@@ -134,6 +134,29 @@ export async function runContentPipeline(payload: GenerationJobPayload) {
             }),
             WORKFLOW_TIMEOUT,
           );
+        } else if (payload.templateId === "lofi-music") {
+          const ti = payload.templateInputs ?? {};
+          const workflow = mastra.getWorkflow("generateLoFiWorkflow");
+          const run = await workflow.createRunAsync();
+          attachProgressWatcher(run, jobId, 5);
+          result = await withTimeout(
+            run.start({
+              inputData: {
+                contentId,
+                userId,
+                prompt: prompt ?? "",
+                platform: platform ?? "generic",
+                aspectRatio,
+                language,
+                moodOrGenre: (ti.moodOrGenre as string) ?? "chill lo-fi hip hop beats",
+                visualStyle: (ti.visualStyle as string) ?? "anime-room",
+                sceneDescription: (ti.sceneDescription as string) ?? undefined,
+                duration: (ti.duration as number) ?? 60,
+                ...templateOverrides,
+              },
+            }),
+            WORKFLOW_TIMEOUT,
+          );
         } else {
           let sceneCount = 3;
           if (payload.templateId === "listicle") {
