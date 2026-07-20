@@ -9,7 +9,9 @@
     "test": "turbo run test",
     "db:generate": "turbo run db:generate --filter @faceless/backend",
     "db:migrate": "turbo run db:migrate --filter @faceless/backend",
-    "db:studio": "turbo run db:studio --filter @faceless/backend"
+    "db:studio": "turbo run db:studio --filter @faceless/backend",
+    "docker:build": "docker build -f apps/backend/Dockerfile -t ghcr.io/keizio/faceless-backend:latest .",
+    "docker:publish": "pnpm docker:build && docker push ghcr.io/keizio/faceless-backend:latest"
   },
   "devDependencies": {
     "prettier": "^3.7.4",
