@@ -218,8 +218,8 @@ function buildScriptUserMessage(params: {
   const cta = (templateCtaPattern ?? "low-friction") as CtaPattern;
 
   const sections: string[] = [
+    `CRITICAL: You MUST write ALL content in ${language}. The hook, body, cta, caption, and all text MUST be in ${language}.`,
     `Create a ${contentType} script for ${platform} about: ${prompt}`,
-    `Language: ${language}`,
   ];
 
   if (framework !== "none") {

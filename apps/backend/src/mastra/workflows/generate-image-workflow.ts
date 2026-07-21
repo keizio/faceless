@@ -227,8 +227,8 @@ templateId: z.string().optional(),
     const cta: CtaPattern = (inputData.templateCtaPattern ?? "low-friction") as CtaPattern;
 
     const sections: string[] = [
+      `CRITICAL: You MUST write ALL content in ${inputData.language}. The hook, body, cta, caption, and all text MUST be in ${inputData.language}.`,
       `Write a social media caption for this ${inputData.platform} image post about: ${inputData.prompt}`,
-      `Language: ${inputData.language}`,
       toneSection,
       renderHeadlineFormula(headline),
       renderCtaPattern(cta),

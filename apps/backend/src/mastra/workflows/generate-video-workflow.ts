@@ -270,8 +270,8 @@ templateInputs: z.record(z.unknown()).optional(),
     const cta: CtaPattern = (inputData.templateCtaPattern ?? "low-friction") as CtaPattern;
 
     const sections: string[] = [
+      `CRITICAL: You MUST write ALL content in ${inputData.language}. The hook, body, cta, caption, narration, scenes, and all text MUST be in ${inputData.language}.`,
       `Create a ${inputData.sceneCount}-scene video script for ${inputData.platform} about: ${inputData.prompt}`,
-      `Language: ${inputData.language}`,
     ];
 
     if (framework === "aida") sections.push(renderAidaFramework());
