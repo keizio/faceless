@@ -483,11 +483,16 @@ const buildSlideStoryboardStep = createStep({
     script: true,
     caption: true,
     enhancedPrompt: true,
+    artStyle: true,
     brandKitJson: true,
+    avatarContext: true,
+    isFaceless: true,
     slideCount: true,
     aspectRatio: true,
     templateId: true,
     templateInputs: true,
+    templateFramework: true,
+    templateCtaPattern: true,
     reviewScore: true,
     reviewFeedback: true,
     slideStoryboard: true,
@@ -650,24 +655,24 @@ const generateSlideImagesStep = createStep({
     caption: z.string(),
     imageUrls: z.array(z.string()),
     contentType: z.enum(["image", "slide", "video", "text"]),
+    platform: z.string(),
+    prompt: z.string(),
+    language: z.string(),
+    enhancedPrompt: z.string().optional(),
+    artStyle: z.string().optional(),
     brandKitJson: z.string().optional(),
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     aspectRatio: z.string(),
+    reviewScore: z.number().optional(),
+    reviewFeedback: z.array(z.string()).optional(),
   }),
   execute: async ({ inputData }) => {
     if (inputData.contentType !== "slide") {
       return {
-        contentId: inputData.contentId,
-        userId: inputData.userId,
-        script: inputData.script,
-        caption: inputData.caption,
+        ...inputData,
         imageUrls: [],
-        contentType: inputData.contentType,
-        brandKitJson: inputData.brandKitJson,
-        templateId: inputData.templateId,
-        templateInputs: inputData.templateInputs,
-        aspectRatio: inputData.aspectRatio,
+        continuityCheckedPrompts: [],
       };
     }
 
@@ -712,16 +717,9 @@ const generateSlideImagesStep = createStep({
     imageUrls.push(...imageResults);
 
     return {
-      contentId: inputData.contentId,
-      userId: inputData.userId,
-      script: inputData.script,
-      caption: inputData.caption,
+      ...inputData,
       imageUrls,
-      contentType: inputData.contentType,
-      brandKitJson: inputData.brandKitJson,
-templateId: inputData.templateId,
-      templateInputs: inputData.templateInputs,
-      aspectRatio: inputData.aspectRatio,
+      continuityCheckedPrompts: inputData.continuityCheckedPrompts,
     };
   },
 });
@@ -740,6 +738,7 @@ const compositeSlideStep = createStep({
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     aspectRatio: z.string(),
+    language: z.string(),
     textLayers: z.record(z.array(z.any())).optional(),
   }),
   outputSchema: z.object({
@@ -749,6 +748,7 @@ const compositeSlideStep = createStep({
     script: z.string(),
     caption: z.string(),
     contentType: z.enum(["image", "slide", "video", "text"]),
+    language: z.string(),
     textLayers: z.record(z.array(z.any())).optional(),
   }),
   execute: async ({ inputData }) => {
@@ -770,6 +770,7 @@ const compositeSlideStep = createStep({
         script: inputData.script,
         caption: inputData.caption,
         contentType: inputData.contentType,
+        language: inputData.language,
       };
     }
 
@@ -830,6 +831,7 @@ const compositeSlideStep = createStep({
           script: inputData.script,
           caption: inputData.caption,
           contentType: inputData.contentType,
+          language: inputData.language,
         };
     }
 
@@ -860,6 +862,7 @@ const compositeSlideStep = createStep({
         script: inputData.script,
         caption: inputData.caption,
         contentType: inputData.contentType,
+        language: inputData.language,
         textLayers,
       };
     }
@@ -871,6 +874,7 @@ const compositeSlideStep = createStep({
       script: inputData.script,
       caption: inputData.caption,
       contentType: inputData.contentType,
+      language: inputData.language,
       textLayers,
     };
   },
@@ -879,7 +883,7 @@ const compositeSlideStep = createStep({
 const styleSlideTextLayersStep = createStep({
   id: "style-slide-text-layers",
   description: "Generate AI-chosen formatting for text overlay layers on slides",
-  inputSchema: z.object({
+inputSchema: z.object({
     contentId: z.string(),
     userId: z.string(),
     templateId: z.string().optional(),
@@ -889,7 +893,14 @@ const styleSlideTextLayersStep = createStep({
     script: z.string(),
     caption: z.string(),
     contentType: z.enum(["image", "slide", "video", "text"]),
+    platform: z.string(),
+    prompt: z.string(),
     brandKitJson: z.string().optional(),
+    language: z.string(),
+    enhancedPrompt: z.string().optional(),
+    artStyle: z.string().optional(),
+    reviewScore: z.number().optional(),
+    reviewFeedback: z.array(z.string()).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -902,9 +913,14 @@ const styleSlideTextLayersStep = createStep({
     caption: z.string(),
     contentType: z.enum(["image", "slide", "video", "text"]),
     brandKitJson: z.string().optional(),
+    language: z.string(),
     textLayers: z.record(z.array(z.any())).optional(),
   }),
   execute: async ({ inputData }) => {
+    if (inputData.contentType !== "slide" && inputData.contentType !== "image") {
+      return inputData;
+    }
+
     const { templateId, templateInputs, aspectRatio } = inputData;
 
     if (!templateId || !templateInputs || Object.keys(templateInputs).length === 0) {
@@ -921,11 +937,13 @@ const styleSlideTextLayersStep = createStep({
     const textContents = firstSlideLayers.map((l) => `- "${(l as TextLayer).text}"`).join("\n");
 
     const agent = mastra.getAgent("textStyler");
+    const languageHint = inputData.language ? `Language: ${inputData.language}` : "";
     const userMessage = `${layerDescriptions}
 
 Text content for each layer (in order):
 ${textContents || "See templateInputs"}
 Aspect ratio: ${aspectRatio}
+${languageHint}
 
 Return ONLY valid JSON array of styling objects, one per layer in order — no markdown, no code fences, no explanation.`;
 
@@ -953,6 +971,7 @@ const saveSlideVersionStep = createStep({
     caption: z.string(),
     compositedImageUrls: z.array(z.string()),
     contentType: z.enum(["image", "slide", "video", "text"]),
+    language: z.string(),
     textLayers: z.record(z.array(z.any())).optional(),
   }),
   outputSchema: z.object({
@@ -1003,7 +1022,7 @@ const saveSlideVersionStep = createStep({
 
     await db
       .update(contents)
-      .set({ status: "ready", caption: inputData.caption })
+      .set({ status: "ready", script: inputData.script, caption: inputData.caption })
       .where(eq(contents.id, inputData.contentId));
 
     return {
