@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID, randomBytes } from "node:crypto";
 
 const CDN_BASE = process.env.R2_PUBLIC_URL || "https://cdn.solutip.com";
@@ -97,4 +97,14 @@ export function randomFilename(ext: string): string {
 
 export function getR2PublicUrl(key: string): string {
   return `${CDN_BASE}/${key}`;
+}
+
+export async function deleteFile(url: string): Promise<void> {
+  const key = url.replace(`${CDN_BASE}/`, "");
+  if (!key || key === url) return;
+  const client = getR2Client();
+  await client.send(new DeleteObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+  }));
 }

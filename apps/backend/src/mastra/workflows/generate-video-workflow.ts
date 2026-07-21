@@ -297,7 +297,17 @@ templateInputs: z.record(z.unknown()).optional(),
       ``,
       `Include a "narration" field with the full voiceover text for the entire video.`,
       `Each scene in the "scenes" array must also include its own "narration" field with the voiceover text for that specific scene.`,
-      `Return ONLY valid JSON with "hook", "scenes" (array with "narration" per scene), "cta", "caption", "narration" — no markdown, no code fences, no explanation.`,
+      `Output format (JSON):
+{
+  "hook": string (attention-grabbing opening),
+  "body": string (main script content),
+  "scenes": array of { "narration": string, "visual_description": string, "camera_direction": object },
+  "cta": string (call to action),
+  "caption": string (with hashtags, required),
+  "narration": string (full voiceover text),
+  "visual_prompt"?: string
+}
+Return ONLY valid JSON — no markdown, no code fences, no explanation.`,
     );
 
     const userMessage = sections.join("\n");
@@ -341,6 +351,7 @@ templateInputs: z.record(z.unknown()).optional(),
       .update(contents)
       .set({
         script,
+        caption,
         metadata: {
           enhancedPrompt: inputData.enhancedPrompt,
           hasAvatar: !!inputData.avatarId,
@@ -463,7 +474,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
             ``,
             `Include a "narration" field with the full voiceover text.`,
             `Each scene in the "scenes" array must also include its own "narration" field with the voiceover text for that specific scene.`,
-            `Return ONLY valid JSON with "hook", "scenes" (array with "narration" per scene), "cta", "caption", "narration" — no markdown, no code fences, no explanation.`,
+            `Return ONLY valid JSON with "hook", "body", "scenes" (array with "narration" per scene), "cta", "caption", "narration" — no markdown, no code fences, no explanation.`,
           ];
 
           const regenResponse = await writerAgent.generate(regenSections.join("\n"));
@@ -508,6 +519,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
         .update(contents)
         .set({
           script: bestScript,
+          caption: bestCaption,
           metadata: {
             enhancedPrompt: inputData.enhancedPrompt,
             hasAvatar: !!inputData.avatarId,
@@ -1292,7 +1304,7 @@ inputSchema: z.object({
 
     await db
       .update(contents)
-      .set({ status: "ready" })
+      .set({ status: "ready", caption: inputData.caption })
       .where(eq(contents.id, inputData.contentId));
 
     return {

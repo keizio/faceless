@@ -10,13 +10,18 @@ import { db } from "../../db/index.js";
 import { contents, contentVersions, mediaAssets } from "../../db/schema.js";
 import { insertMediaAsset } from "../../lib/media.js";
 import { eq, max } from "drizzle-orm";
-import type { Platform, ContentType, BrandKit } from "@faceless/shared";
+import type { Platform, ContentType, BrandKit, TextLayer } from "@faceless/shared";
 import type { EnhancedPrompt, ArtStyle } from "../../lib/prompts/types.js";
 import {
   renderChatTemplate,
   renderSplitScreenTemplate,
 } from "../../lib/compositing/renderer.js";
-import { templateOverlayToTextLayers } from "../../lib/compositing/overlay-to-layers.js";
+import {
+  templateOverlayToTextLayers,
+  TEMPLATE_LAYER_DESCRIPTIONS,
+  mergeStylesIntoTextLayers,
+} from "../../lib/compositing/overlay-to-layers.js";
+import type { TextLayerFormatting } from "../../lib/compositing/overlay-to-layers.js";
 import { uploadFile, randomFilename } from "../../lib/storage.js";
 import { applyWatermarkToBuffer } from "../../lib/compositing/watermark.js";
 import { mastra } from "../../mastra/index.js";
@@ -233,6 +238,14 @@ templateId: z.string().optional(),
       sections.push(``, `Brand identity:`, inputData.brandKitGuidance);
     }
 
+    sections.push(``, `Output format (JSON):
+{
+  "hook": string (attention-grabbing opening),
+  "body": string (main content),
+  "cta": string (call to action),
+  "caption": string (with hashtags, required),
+  "visual_prompt"?: string (visual description for AI generation)
+}`);
     sections.push(``, `Return ONLY valid JSON — no markdown, no code fences, no explanation.`);
 
     const userMessage = sections.join("\n");
@@ -260,6 +273,7 @@ templateId: z.string().optional(),
       .update(contents)
       .set({
         script,
+        caption,
         metadata: {
           enhancedPrompt: inputData.enhancedPrompt,
           hasAvatar: !!inputData.avatarId,
@@ -396,6 +410,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation.`;
         .update(contents)
         .set({
           script: bestScript,
+          caption: bestCaption,
           metadata: {
             enhancedPrompt: inputData.enhancedPrompt,
             hasAvatar: !!inputData.promptMetadata?.context?.hasAvatar,
@@ -543,6 +558,71 @@ const generateImageStep = createStep({
   },
 });
 
+const styleImageTextLayersStep = createStep({
+  id: "style-image-text-layers",
+  description: "Generate AI-chosen formatting for text overlay layers on images",
+  inputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
+    aspectRatio: z.string(),
+    imageUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    brandKitJson: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    templateId: z.string().optional(),
+    templateInputs: z.record(z.unknown()).optional(),
+    aspectRatio: z.string(),
+    imageUrls: z.array(z.string()),
+    script: z.string(),
+    caption: z.string(),
+    brandKitJson: z.string().optional(),
+    textLayers: z.record(z.array(z.any())).optional(),
+  }),
+  execute: async ({ inputData }) => {
+    const { templateId, templateInputs, aspectRatio } = inputData;
+
+    if (!templateId || !templateInputs || Object.keys(templateInputs).length === 0) {
+      return inputData;
+    }
+
+    const layerDescriptions = TEMPLATE_LAYER_DESCRIPTIONS[templateId];
+    if (!layerDescriptions) return inputData;
+
+    const textLayers = templateOverlayToTextLayers(templateId, templateInputs, aspectRatio);
+    if (Object.keys(textLayers).length === 0) return inputData;
+
+    const firstSlideLayers = Object.values(textLayers)[0] ?? [];
+    const textContents = firstSlideLayers.map((l) => `- "${(l as TextLayer).text}"`).join("\n");
+
+    const agent = mastra.getAgent("textStyler");
+    const userMessage = `${layerDescriptions}
+
+Text content for each layer (in order):
+${textContents || "See templateInputs"}
+Aspect ratio: ${aspectRatio}
+
+Return ONLY valid JSON array of styling objects, one per layer in order — no markdown, no code fences, no explanation.`;
+
+    const response = await agent.generate(userMessage);
+    const responseText = (response as { text: string }).text;
+
+    try {
+      const parsed = JSON.parse(responseText);
+      const styles = Array.isArray(parsed) ? parsed as TextLayerFormatting[] : [];
+      const styledLayers = mergeStylesIntoTextLayers(textLayers, styles);
+      return { ...inputData, textLayers: styledLayers as unknown as Record<string, unknown[]> };
+    } catch {
+      return { ...inputData, textLayers };
+    }
+  },
+});
+
 const compositeImageStep = createStep({
   id: "composite-image",
   description: "Composite template overlays onto generated images (chat UI, split-screen, fact/quote cards)",
@@ -556,6 +636,7 @@ const compositeImageStep = createStep({
     templateId: z.string().optional(),
     templateInputs: z.record(z.unknown()).optional(),
     aspectRatio: z.string(),
+    textLayers: z.record(z.array(z.any())).optional(),
   }),
   outputSchema: z.object({
     contentId: z.string(),
@@ -570,6 +651,11 @@ const compositeImageStep = createStep({
 
     let resultUrls: string[] = imageUrls;
     let textLayers: Record<string, unknown[]> | undefined;
+
+    // If style step already produced text layers, use them directly
+    if (inputData.textLayers && Object.keys(inputData.textLayers).length > 0) {
+      textLayers = inputData.textLayers;
+    }
 
     if (!templateId || !templateInputs || Object.keys(templateInputs).length === 0) {
       resultUrls = imageUrls;
@@ -587,7 +673,9 @@ const compositeImageStep = createStep({
         case "fact-card":
         case "quote-card":
         case "pov": {
-          textLayers = templateOverlayToTextLayers(templateId, templateInputs, aspectRatio) as unknown as Record<string, unknown[]>;
+          if (!textLayers) {
+            textLayers = templateOverlayToTextLayers(templateId, templateInputs, aspectRatio) as unknown as Record<string, unknown[]>;
+          }
           resultUrls = imageUrls;
           break;
         }
@@ -601,9 +689,11 @@ const compositeImageStep = createStep({
           const buffer = await renderSplitScreenTemplate(templateInputs, aspectRatio, leftBuffer, rightBuffer);
           const url = await uploadFile(buffer, randomFilename("png"), "image/png");
           compositedUrls.push(url);
-          const labelLayers = templateOverlayToTextLayers(templateId, templateInputs, aspectRatio);
-          if (Object.keys(labelLayers).length > 0) {
-            textLayers = labelLayers as unknown as Record<string, unknown[]>;
+          if (!textLayers) {
+            const labelLayers = templateOverlayToTextLayers(templateId, templateInputs, aspectRatio);
+            if (Object.keys(labelLayers).length > 0) {
+              textLayers = labelLayers as unknown as Record<string, unknown[]>;
+            }
           }
           break;
         }
@@ -705,7 +795,7 @@ const saveImageVersionStep = createStep({
 
     await db
       .update(contents)
-      .set({ status: "ready" })
+      .set({ status: "ready", caption: inputData.caption })
       .where(eq(contents.id, inputData.contentId));
 
     return {
@@ -733,6 +823,7 @@ export const generateImageWorkflow = createWorkflow({
   .then(generateImageScriptStep)
   .then(reviewImageScriptStep)
   .then(generateImageStep)
+  .then(styleImageTextLayersStep)
   .then(compositeImageStep)
   .then(saveImageVersionStep);
 

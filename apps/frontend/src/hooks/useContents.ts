@@ -116,3 +116,29 @@ export function useDuplicateContent() {
     },
   });
 }
+
+export function useDeleteMedia() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contentId, mediaId }: { contentId: string; mediaId: string }) => {
+      const { data } = await api.delete(`/api/contents/${contentId}/media/${mediaId}`);
+      return data;
+    },
+    onSuccess: (_, { contentId }) => {
+      queryClient.invalidateQueries({ queryKey: ["contents", contentId] });
+    },
+  });
+}
+
+export function useDeleteVersion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contentId, versionId }: { contentId: string; versionId: string }) => {
+      const { data } = await api.delete(`/api/contents/${contentId}/versions/${versionId}`);
+      return data;
+    },
+    onSuccess: (_, { contentId }) => {
+      queryClient.invalidateQueries({ queryKey: ["contents", contentId] });
+    },
+  });
+}

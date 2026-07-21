@@ -1,6 +1,3 @@
-"use client";
-
-import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   MessageSquare,
@@ -40,39 +37,37 @@ export function TemplateCard({ template }: { template: ContentTemplate }) {
   const colorClass = CATEGORY_COLORS[template.category] ?? "bg-muted text-muted-foreground";
 
   return (
-    <Link href={`/templates/${template.id}`}>
-      <Card className="group hover:border-primary/50 transition-all cursor-pointer h-full">
-        <CardContent className="p-4 flex flex-col h-full">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 group-hover:bg-primary/20 transition-colors">
-              <Icon className="h-5 w-5 text-primary" />
-            </div>
+    <Card className="group hover:border-primary/50 transition-all cursor-pointer h-full">
+      <CardContent className="p-4 flex flex-col h-full">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 group-hover:bg-primary/20 transition-colors">
+            <Icon className="h-5 w-5 text-primary" />
+          </div>
+          <span
+            className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${colorClass}`}
+          >
+            {template.category}
+          </span>
+        </div>
+
+        <h3 className="text-sm font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
+          {template.name}
+        </h3>
+        <p className="text-xs text-muted-foreground line-clamp-2 flex-1">
+          {template.description}
+        </p>
+
+        <div className="mt-3 flex gap-1 flex-wrap">
+          {template.supportedContentTypes.map((type) => (
             <span
-              className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${colorClass}`}
+              key={type}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
             >
-              {template.category}
+              {type}
             </span>
-          </div>
-
-          <h3 className="text-sm font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
-            {template.name}
-          </h3>
-          <p className="text-xs text-muted-foreground line-clamp-2 flex-1">
-            {template.description}
-          </p>
-
-          <div className="mt-3 flex gap-1 flex-wrap">
-            {template.supportedContentTypes.map((type) => (
-              <span
-                key={type}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
-              >
-                {type}
-              </span>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

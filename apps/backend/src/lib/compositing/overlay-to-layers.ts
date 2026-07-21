@@ -1,5 +1,60 @@
 import type { TextLayer, TextLayerMap } from "@faceless/shared";
 
+export interface TextLayerFormatting {
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: "normal" | "bold";
+  fontStyle?: "normal" | "italic";
+  color?: string;
+  textAlign?: "left" | "center" | "right";
+  lineHeight?: number;
+  charSpacing?: number;
+  underline?: boolean;
+  linethrough?: boolean;
+  textStroke?: string;
+  textStrokeWidth?: number;
+  textBackgroundColor?: string;
+}
+
+export function mergeStylesIntoTextLayers(
+  layers: TextLayerMap,
+  styles: TextLayerFormatting[],
+): TextLayerMap {
+  const result: TextLayerMap = {};
+  for (const [slideKey, slideLayers] of Object.entries(layers)) {
+    result[slideKey] = slideLayers.map((layer, index) => {
+      const style = styles[index];
+      if (!style) return layer;
+      return { ...layer, ...style };
+    });
+  }
+  return result;
+}
+
+export const TEMPLATE_LAYER_DESCRIPTIONS: Record<string, string> = {
+  "fact-card": `Template "fact-card" has 3 text layers in order:
+1. "topic" — The topic/heading text, displayed at top. Short, bold.
+2. "factText" — The main fact content. Largest text element, centered.
+3. "source" — Source citation at bottom. Small, subtle.`,
+
+  "quote-card": `Template "quote-card" has 2 text layers in order:
+1. "quoteText" — The quote text. Large, prominent.
+2. "author" — The author name. Smaller, positioned below.`,
+
+  "pov": `Template "pov" has 1 text layer:
+1. "povChip" — POV label chip at top of image. Compact, bold, with semi-transparent dark background.`,
+
+  "listicle": `Template "listicle" has 4 text layers per slide (same styling applies to all slides):
+1. "topic" — Topic heading at top. Small, uppercase, subtle.
+2. "number" — Item number. Very large, decorative, low opacity.
+3. "title" — Item title. Bold, medium size.
+4. "description" — Item description. Smaller, lighter weight.`,
+
+  "split-screen": `Template "split-screen" has 2 text layers:
+1. "leftLabel" — Label for the left panel.
+2. "rightLabel" — Label for the right panel. Same styling as left.`,
+};
+
 const FACT_CARD_STYLE_CONFIGS: Record<string, { textColor: string; accentColor: string }> = {
   bold: { textColor: "#ffffff", accentColor: "#e94560" },
   minimal: { textColor: "#1a1a1a", accentColor: "#666666" },

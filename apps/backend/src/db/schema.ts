@@ -128,6 +128,7 @@ export const contents = pgTable(
     title: text("title"),
     prompt: text("prompt").notNull(),
     script: text("script"),
+    caption: text("caption"),
     templateId: text("template_id"),
     templateInputs: jsonb("template_inputs").$type<Record<string, unknown>>(),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),

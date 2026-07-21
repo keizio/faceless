@@ -6,7 +6,7 @@ import { CREDIT_COSTS, TEMPLATE_MULTIPLIERS } from "@faceless/shared";
 import { UsageService } from "./usage.js";
 import { CreditTransactionService } from "./credit-transaction.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { getR2Client, uploadFile, randomFilename } from "../lib/storage.js";
+import { getR2Client, uploadFile, randomFilename, deleteFile } from "../lib/storage.js";
 import { getProviders } from "../lib/providers/factory.js";
 import { getEffectiveSlideCount } from "../lib/utils/content.js";
 
@@ -306,6 +306,61 @@ export class ContentService {
 
     await db.delete(mediaAssets).where(eq(mediaAssets.contentId, contentId));
     await db.delete(contents).where(eq(contents.id, contentId));
+  }
+
+  async deleteMediaAsset(userId: string, contentId: string, mediaId: string) {
+    const [asset] = await db
+      .select({ url: mediaAssets.url })
+      .from(mediaAssets)
+      .innerJoin(contents, eq(mediaAssets.contentId, contents.id))
+      .where(
+        and(
+          eq(contents.userId, userId),
+          eq(mediaAssets.contentId, contentId),
+          eq(mediaAssets.id, mediaId),
+        ),
+      )
+      .limit(1);
+
+    if (!asset) throw new Error("Media not found");
+
+    try {
+      await deleteFile(asset.url);
+    } catch {
+      // Non-critical; proceed with DB cleanup
+    }
+
+    await db.delete(mediaAssets).where(eq(mediaAssets.id, mediaId));
+  }
+
+  async deleteVersion(userId: string, contentId: string, versionId: string) {
+    const [version] = await db
+      .select({ outputUrl: contentVersions.outputUrl, thumbnailUrl: contentVersions.thumbnailUrl })
+      .from(contentVersions)
+      .innerJoin(contents, eq(contentVersions.contentId, contents.id))
+      .where(
+        and(
+          eq(contents.userId, userId),
+          eq(contentVersions.contentId, contentId),
+          eq(contentVersions.id, versionId),
+        ),
+      )
+      .limit(1);
+
+    if (!version) throw new Error("Version not found");
+
+    try {
+      if (version.outputUrl) await deleteFile(version.outputUrl);
+    } catch {
+      // Non-critical
+    }
+    try {
+      if (version.thumbnailUrl) await deleteFile(version.thumbnailUrl);
+    } catch {
+      // Non-critical
+    }
+
+    await db.delete(contentVersions).where(eq(contentVersions.id, versionId));
   }
 
   async getVersionDownloadUrl(userId: string, contentId: string, versionId: string): Promise<string | null> {

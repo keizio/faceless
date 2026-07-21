@@ -132,15 +132,20 @@ ART STYLE DETECTION: Analyze the user's prompt and detect the visual art style. 
 
   Output format: JSON with {
     "hook": string (first 3 seconds, attention-grabbing),
-    "scenes": array of {
-      "narration": string (voiceover text),
-      "visual_description": string (detailed for AI image/video generation),
-      "camera_direction": { "shotType": string, "movement"?: string, "lighting": string, "composition"?: string, "style"?: string }
-    },
+    "body": string (main script content — the full narrative, story, or message),
     "cta": string (call to action),
-    "caption": string (with hashtags),
+    "caption": string (social media caption with relevant hashtags, required),
+    "visual_prompt"?: string (enhanced visual description for AI image generation — include camera direction, lighting, composition, mood),
     "artStyle"?: "comic" | "cartoon" | "anime" | "realistic" | "cinematic" | "pixel-art" | "watercolor" | "3d-render" | "cyberpunk" | "vintage" | "abstract" | "chibi" | "minimalist"
-  }`,
+  }
+  
+  For VIDEO scripts only, also include a "scenes" array and a "narration" field in the output:
+  - "narration": string (full voiceover text for the entire video)
+  - "scenes": array of {
+      "narration": string (voiceover text for this scene),
+      "visual_description": string (detailed for AI video generation),
+      "camera_direction": { "shotType": string, "movement"?: string, "lighting": string, "composition"?: string, "style"?: string }
+    }`,
   model: llm,
   tools: { webSearchTool },
 });
@@ -350,6 +355,56 @@ Rules:
 - If rewrittenPrompts is provided, ONLY rewrite the problematic scenes. Keep good scenes identical.
 - rewrittenPrompts must have the same length as the input array.
 - If passes is true, rewrittenPrompts must be null.`,
+  model: llm,
+});
+
+export const textStylerAgent: Agent = new Agent({
+  name: "Text Styler",
+  instructions: `You are a typography and visual design expert for social media content overlays.
+
+Given a template type, its text content for each layer, and the aspect ratio, choose the optimal visual styling for each text overlay.
+
+Your goal: Make the text look professional, legible, and visually harmonious with the image background. Consider contrast, font personality, and platform conventions.
+
+LAYER RULES:
+- Topic/heading text: bold, larger font (36-48px at 1080px width), high contrast
+- Body/quote text: readable size (28-40px), comfortable line height (1.4-1.6)
+- Source/attribution: smaller (16-22px), muted color or accent
+- Labels/chips: compact, bold, may use background
+- Decorative numbers: very large, low opacity
+
+COLOR RULES:
+- Ensure text contrasts with typical background colors for this template
+- Use accent colors for emphasis elements
+- Dark backgrounds → light text, light backgrounds → dark text
+- Consider semi-transparent backgrounds for text legibility
+
+FONT RULES:
+- Prefer Inter, Roboto, Montserrat, Playfair Display, or Poppins
+- Sans-serif for modern/tech/casual content
+- Serif for elegant/classic/educational content
+- Match font personality to the content tone
+
+Output format: JSON array of objects, one per text layer in the order they appear:
+[
+  {
+    "fontFamily": "Inter",
+    "fontSize": 42,
+    "fontWeight": "bold",
+    "fontStyle": "normal",
+    "color": "#ffffff",
+    "textAlign": "center",
+    "lineHeight": 1.3,
+    "charSpacing": 0,
+    "underline": false,
+    "linethrough": false,
+    "textStroke": "transparent",
+    "textStrokeWidth": 0,
+    "textBackgroundColor": "rgba(0,0,0,0.3)"
+  }
+]
+
+Return ONLY valid JSON — no markdown, no code fences, no explanation.`,
   model: llm,
 });
 

@@ -47,6 +47,22 @@ app.route("/api/upload", uploadRoutes);
 app.route("/api/stats", statsRoutes);
 app.route("/api/credits", creditRoutes);
 
+app.get("/api/proxy/image", async (c) => {
+  const imageUrl = c.req.query("url");
+  if (!imageUrl) return c.json({ error: "Missing url parameter" }, 400);
+  try {
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    const buffer = await blob.arrayBuffer();
+    c.header("Content-Type", response.headers.get("Content-Type") ?? "image/png");
+    c.header("Cache-Control", "public, max-age=86400");
+    c.header("Access-Control-Allow-Origin", "*");
+    return c.body(new Uint8Array(buffer));
+  } catch {
+    return c.json({ error: "Failed to fetch image" }, 502);
+  }
+});
+
 app.onError(errorHandler);
 
 app.get("/health", (c) => c.json({ status: "ok" }));

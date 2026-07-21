@@ -4,7 +4,7 @@ import { AuthGuard } from "@/components/AuthGuard";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { GenerationProgress } from "@/components/GenerationProgress";
 import { StatusBadge } from "@/components/StatusBadge";
-import { useContent, useRegenerateContent, useDuplicateContent, useDeleteContent } from "@/hooks/useContents";
+import { useContent, useRegenerateContent, useDuplicateContent, useDeleteContent, useDeleteMedia, useDeleteVersion } from "@/hooks/useContents";
 import { LANGUAGES } from "@faceless/shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,11 +61,15 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
   const regenerate = useRegenerateContent();
   const duplicate = useDuplicateContent();
   const deleteContent = useDeleteContent();
+  const deleteMedia = useDeleteMedia();
+  const deleteVersion = useDeleteVersion();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDuplicate, setShowDuplicate] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [duplicateLang, setDuplicateLang] = useState("");
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [confirmingMediaId, setConfirmingMediaId] = useState<string | null>(null);
+  const [confirmingVersionId, setConfirmingVersionId] = useState<string | null>(null);
 
   const images = content?.media?.filter((m: { type: string }) => m.type === "image") ?? [];
   const videos = content?.media?.filter((m: { type: string }) => m.type === "video") ?? [];
@@ -177,6 +181,38 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                                 >
                                   <Download className="h-3.5 w-3.5" />
                                 </a>
+                                {confirmingMediaId === img.id ? (
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => {
+                                        deleteMedia.mutate({ contentId: id, mediaId: img.id });
+                                        setConfirmingMediaId(null);
+                                      }}
+                                      className="rounded-md bg-destructive/90 p-1.5 text-destructive-foreground hover:bg-destructive transition-colors text-[11px] font-medium"
+                                      disabled={deleteMedia.isPending}
+                                    >
+                                      {deleteMedia.isPending ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        "Delete"
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmingMediaId(null)}
+                                      className="rounded-md bg-background/80 p-1.5 hover:bg-background transition-colors text-[11px]"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setConfirmingMediaId(img.id)}
+                                    className="rounded-md bg-background/80 p-1.5 hover:bg-background transition-colors hover:text-destructive"
+                                    aria-label="Delete media"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );
@@ -340,7 +376,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                 )}
 
                 {/* Caption */}
-                {content.versions?.length > 0 && content.versions[0]?.metadata?.caption && (
+                {content.caption && (
                   <Card className="glass depth-2 border-border/50">
                     <CardContent className="p-5">
                       <h2 className="mb-3 text-sm font-semibold text-foreground">
@@ -349,7 +385,7 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                       </h2>
                       <div className="rounded-lg bg-muted p-4">
                         <p className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
-                          {content.versions[0].metadata.caption}
+                          {content.caption}
                         </p>
                       </div>
                     </CardContent>
@@ -404,17 +440,53 @@ export default function ContentPage({ params }: { params: Promise<{ id: string }
                                     })}
                                   </p>
                                 </div>
-                                {v.outputUrl && (
-                                  <a
-                                    href={v.outputUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    <Button variant="default" size="sm">
-                                      Download
-                                    </Button>
-                                  </a>
-                                )}
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {v.outputUrl && (
+                                    <a
+                                      href={v.outputUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <Button variant="default" size="sm">
+                                        Download
+                                      </Button>
+                                    </a>
+                                  )}
+                                  {content.versions.length > 1 && (
+                                    confirmingVersionId === v.id ? (
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          onClick={() => {
+                                            deleteVersion.mutate({ contentId: id, versionId: v.id });
+                                            setConfirmingVersionId(null);
+                                          }}
+                                          className="rounded-md bg-destructive/90 px-2 py-1 text-destructive-foreground hover:bg-destructive transition-colors text-[11px] font-medium"
+                                          disabled={deleteVersion.isPending}
+                                        >
+                                          {deleteVersion.isPending ? (
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                          ) : (
+                                            "Delete"
+                                          )}
+                                        </button>
+                                        <button
+                                          onClick={() => setConfirmingVersionId(null)}
+                                          className="rounded-md bg-background/80 px-2 py-1 hover:bg-background transition-colors text-[11px]"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => setConfirmingVersionId(v.id)}
+                                        className="rounded-md bg-background/80 p-1.5 hover:bg-background transition-colors hover:text-destructive"
+                                        aria-label="Delete version"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    )
+                                  )}
+                                </div>
                               </div>
                             </CardContent>
                           </Card>

@@ -68,7 +68,9 @@ export function TextToolbar({ onUpdateLayer, onRemoveLayer }: TextToolbarProps) 
   return (
     <div
       className="relative z-10 flex flex-wrap items-center gap-3 p-3 border-b border-border/50 bg-background"
-      onMouseDown={(e) => e.preventDefault()}
+      onMouseDown={(e) => {
+        if ((e.target as HTMLElement).tagName !== "INPUT") e.preventDefault();
+      }}
     >
       <div className="flex items-center gap-2">
         <Label className="text-xs text-muted-foreground">Font</Label>
@@ -246,7 +248,11 @@ export function TextToolbar({ onUpdateLayer, onRemoveLayer }: TextToolbarProps) 
         <input
           type="color"
           value={selectedLayer.textStroke ?? "#000000"}
-          onChange={(e) => onUpdateLayer(selectedLayer.id, { textStroke: e.target.value })}
+          onChange={(e) => {
+            const updates: Partial<TextLayer> = { textStroke: e.target.value };
+            if (!selectedLayer.textStrokeWidth) updates.textStrokeWidth = 1;
+            onUpdateLayer(selectedLayer.id, updates);
+          }}
           className="relative h-8 w-8 cursor-pointer rounded border border-border z-20"
           style={{ zIndex: 20 }}
         />

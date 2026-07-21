@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { useTemplates } from "@/hooks/useTemplates";
 import { Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import type { TemplateCategory } from "@faceless/shared";
 
@@ -92,7 +93,9 @@ export default function TemplatesPage() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filtered?.map((template) => (
-                <TemplateCard key={template.id} template={template} />
+                <Link key={template.id} href={`/templates/${template.id}`}>
+                  <TemplateCard template={template} />
+                </Link>
               ))}
             </div>
           )}

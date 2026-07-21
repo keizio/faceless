@@ -141,3 +141,21 @@ contentRoutes.delete("/:id", async (c) => {
   await service.deleteContent(userId, id);
   return c.json({ success: true });
 });
+
+contentRoutes.delete("/:id/media/:mediaId", async (c) => {
+  const userId = c.get("userId");
+  const contentId = c.req.param("id");
+  const mediaId = c.req.param("mediaId");
+  const service = new ContentService();
+  await service.deleteMediaAsset(userId, contentId, mediaId);
+  return c.json({ success: true });
+});
+
+contentRoutes.delete("/:id/versions/:versionId", async (c) => {
+  const userId = c.get("userId");
+  const contentId = c.req.param("id");
+  const versionId = c.req.param("versionId");
+  const service = new ContentService();
+  await service.deleteVersion(userId, contentId, versionId);
+  return c.json({ success: true });
+});
